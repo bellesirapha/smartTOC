@@ -1,0 +1,161 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #11111b;
+  color: #cdd6f4;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+}
+
+/* ── Toolbar ─────────────────────────────────────────────────── */
+
+.app__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: #181825;
+  border-bottom: 1px solid #313244;
+  flex-shrink: 0;
+}
+
+.app__brand {
+  font-weight: 700;
+  font-size: 15px;
+  color: #89b4fa;
+  letter-spacing: 0.03em;
+  margin-right: auto;
+}
+
+.app__upload-btn {
+  padding: 6px 14px;
+  background: #89b4fa;
+  color: #1e1e2e;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.app__upload-btn:hover {
+  background: #74c7ec;
+}
+
+.app__upload-btn--large {
+  padding: 10px 28px;
+  font-size: 14px;
+}
+
+.app__save-btn {
+  padding: 6px 14px;
+  background: #a6e3a1;
+  color: #1e1e2e;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.app__save-btn:hover {
+  background: #94e2d5;
+}
+
+.app__save-btn--disabled {
+  background: #45475a;
+  color: #585b70;
+  cursor: not-allowed;
+}
+
+.app__save-btn--disabled:hover {
+  background: #45475a;
+}
+
+/* ── Workspace ───────────────────────────────────────────────── */
+
+.app__workspace {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* ── Drop zone ───────────────────────────────────────────────── */
+
+.app__dropzone {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app__dropzone-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px;
+  border: 2px dashed #45475a;
+  border-radius: 12px;
+  color: #6c7086;
+  font-size: 14px;
+  text-align: center;
+}
+
+.app__dropzone-icon {
+  font-size: 48px;
+}
+
+/* ── Panes ───────────────────────────────────────────────────── */
+
+.app__pane {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.app__pane--toc {
+  /* width controlled by inline style from state */
+  min-width: 180px;
+  flex-shrink: 0;
+  border-right: none; /* replaced by resize handle */
+}
+
+.app__resize-handle {
+  width: 5px;
+  flex-shrink: 0;
+  background: #313244;
+  cursor: col-resize;
+  transition: background 0.15s;
+  user-select: none;
+}
+
+.app__resize-handle:hover,
+.app__resize-handle:active {
+  background: #89b4fa;
+}
+
+/* Prevent text selection across whole app while dragging the handle */
+.app--resizing,
+.app--resizing * {
+  user-select: none;
+  cursor: col-resize !important;
+}
+
+.app__pane--pdf {
+  flex: 1;
+  min-width: 400px;
+}
+
+.app__pane--audit {
+  /* Fixed width, sits as rightmost column */
+  flex-shrink: 0;
+}

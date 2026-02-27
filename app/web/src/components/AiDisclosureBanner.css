@@ -1,0 +1,57 @@
+.ai-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  font-size: 13px;
+  line-height: 1.4;
+  border-bottom: 2px solid transparent;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  flex-shrink: 0;
+}
+
+.ai-banner--pending {
+  background: #fff3cd;
+  border-color: #f5c842;
+  color: #664d03;
+}
+
+.ai-banner--acknowledged {
+  background: #e8f5e9;
+  border-color: #66bb6a;
+  color: #1b5e20;
+}
+
+.ai-banner__icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.ai-banner__text {
+  flex: 1;
+}
+
+.ai-banner__ack-btn {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  background: #f5c842;
+  border: 1px solid #d4a017;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: #3d2a00;
+  white-space: nowrap;
+}
+
+.ai-banner__ack-btn:hover {
+  background: #e6b800;
+}
+
+.ai-banner__ack-label {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+}

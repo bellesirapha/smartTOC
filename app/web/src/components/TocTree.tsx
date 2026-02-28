@@ -41,6 +41,10 @@ interface Props {
   /** True when a PDF is loaded and ready for generation */
   pdfReady: boolean;
   generating: boolean;
+  /** Live progress text during generation (from extractToc onProgress) */
+  generationStatus?: string;
+  /** Save callback — shown in footer when TOC exists */
+  onSave?: () => void;
 }
 
 // Re-export for convenience
@@ -69,6 +73,8 @@ export const TocTree: React.FC<Props> = ({
   onGenerateToc,
   pdfReady,
   generating,
+  generationStatus,
+  onSave,
 }) => {
   const sensors = useSensors(useSensor(PointerSensor));
 
@@ -115,7 +121,9 @@ export const TocTree: React.FC<Props> = ({
       </div>
 
       {generating && (
-        <div className="toc-tree__generating">Generating TOC…</div>
+        <div className="toc-tree__generating">
+          {generationStatus || 'Generating TOC…'}
+        </div>
       )}
 
       {!generating && nodes.length === 0 && (
@@ -152,6 +160,19 @@ export const TocTree: React.FC<Props> = ({
             </ul>
           </SortableContext>
         </DndContext>
+      )}
+
+      {nodes.length > 0 && (
+        <div className="toc-tree__footer">
+          {onSave && (
+            <button className="toc-tree__save-btn" onClick={onSave}>
+              💾 Save
+            </button>
+          )}
+          <p className="toc-tree__ai-note">
+            ⚠ AI-generated — verify before use
+          </p>
+        </div>
       )}
     </div>
   );

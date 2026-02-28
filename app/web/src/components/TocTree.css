@@ -79,3 +79,39 @@
   overflow-y: auto;
   flex: 1;
 }
+
+/* ── Footer (Save + AI disclosure) ─────────────────────── */
+
+.toc-tree__footer {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-top: 1px solid #313244;
+  background: #1e1e2e;
+}
+
+.toc-tree__save-btn {
+  width: 100%;
+  padding: 7px 0;
+  background: #45475a;
+  color: #cdd6f4;
+  border: 1px solid #585b70;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.toc-tree__save-btn:hover {
+  background: #585b70;
+}
+
+.toc-tree__ai-note {
+  font-size: 11px;
+  color: #45475a;
+  text-align: center;
+  line-height: 1.4;
+  user-select: none;
+}

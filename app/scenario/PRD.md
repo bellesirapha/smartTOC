@@ -26,7 +26,8 @@ This Constitution is the highest-order constraint. All product, design, and engi
 
 3.  **No Hallucinations, Ever**
     *   The system must never invent headings, sub-headings, or structure.
-    *   Unclear sections must be labeled explicitly as **"Unknown"**.
+    *   Unclear sections must be flagged with a **low-confidence badge** (`?`). The heading text is preserved verbatim from the PDF — no "Unknown" prefix is added.
+    *   Users can confirm a flagged entry (converts badge to `✓`) or edit/delete it.
 
 4.  **Transparent AI Disclosure**
     *   The UI must display a **prominent, persistent warning** that the TOC is AI-generated and may not be accurate.
@@ -72,10 +73,13 @@ An AI-assisted PDF TOC generator that:
 
 1.  **Generates a hierarchical TOC**
     *   Based strictly on observable document signals (layout, typography, structure)
+    *   Running page headers repeated across consecutive pages are automatically collapsed to a single entry
 2.  **Explicitly marks uncertainty**
-    *   Ambiguous sections are labeled “Unknown”
+    *   Ambiguous entries (confidence < 40%) are flagged with a `?` badge; high-confidence entries show a numeric confidence percentage
+    *   Users can confirm a flagged entry (`✓`) without editing its text
 3.  **Allows manual refinement**
-    *   Drag-and-drop editing of hierarchy
+    *   Drag-and-drop reordering of hierarchy
+    *   **Double-click** any label to edit it inline (Enter to save, Escape to cancel)
 4.  **Persists results**
     *   Saves TOC directly into the PDF
 5.  **Tracks provenance**
@@ -102,8 +106,10 @@ An AI-assisted PDF TOC generator that:
 ### 2.4 In-Scope Features
 
 *   AI-generated TOC (headings + hierarchy)
-*   Explicit “Unknown” nodes
+*   Confidence badges on each TOC entry (`?` low / numeric % high)
+*   User confirmation of low-confidence entries
 *   Drag-and-drop TOC editing
+*   Inline label editing via double-click
 *   Save TOC to PDF (bookmarks / outline)
 *   Audit trail (creator, editor, timestamps)
 *   Static web UI
@@ -129,7 +135,9 @@ An AI-assisted PDF TOC generator that:
     *   PDF.js
 *   **TOC UI**:
     *   Tree-based navigation component
-    *   Drag-and-drop (e.g., HTML5 DnD or lightweight library)
+    *   Drag-and-drop reordering (`@dnd-kit`)
+    *   Inline label editing: **double-click** to edit, Enter/blur to save, Escape to cancel
+    *   Confidence badge system: `?` (low, < 40%), numeric `%` (medium/high); `✓` after user confirmation
 
 ### 3.2 AI / TOC Generation Layer
 
@@ -177,7 +185,7 @@ An AI-assisted PDF TOC generator that:
 | Hallucination Rate | % of invented headings            | **0% (hard gate)** |
 | Precision          | Correct headings / total headings | ≥ 95%              |
 | Hierarchy Accuracy | Correct parent-child mappings     | ≥ 90%              |
-| Unknown Usage      | Ambiguous sections labeled        | ≥ 99% recall       |
+| Low-confidence Coverage | Ambiguous sections flagged with `?` badge | ≥ 99% recall |
 | Edit Success       | User can fix AI errors            | 100%               |
 | Persistence        | TOC survives reopen/share         | 100%               |
 | Audit Completeness | Missing audit fields              | 0                  |
@@ -189,7 +197,7 @@ An AI-assisted PDF TOC generator that:
 **Blockers (Any = No Ship)**
 
 *   Any fabricated heading
-*   Incorrect hierarchy with no “Unknown” fallback
+*   Incorrect hierarchy with no low-confidence badge fallback
 *   TOC regenerated without user consent
 *   Missing creator/editor metadata
 
@@ -208,8 +216,8 @@ These rules are **non-negotiable**.
 
 1.  **Do not invent**
     *   No headings or subheadings not present in the PDF
-2.  **If unclear → Unknown**
-    *   Ambiguity must be explicit
+2.  **If unclear → flag, don't label**
+    *   Ambiguity must be surfaced via a low-confidence badge (`?`), not by altering the heading text
 3.  **Prefer omission**
     *   Missing TOC entries are acceptable; false ones are not
 4.  **No semantic guessing**
@@ -254,7 +262,7 @@ These rules are **non-negotiable**.
 ## 7. Open Questions (Post‑PRD)
 
 *   Should audit metadata be embedded in-PDF or external by default?
-*   What is the acceptable upper bound for “Unknown” density?
+*   What is the acceptable upper bound for low-confidence badge density?
 *   Do we allow multiple saved TOC versions per PDF?
 
 ***

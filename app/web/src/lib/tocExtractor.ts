@@ -18,6 +18,8 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import type { TextItem } from 'pdfjs-dist/types/src/display/api';
 import type { TocNode } from '../types';
+import { refineTocWithLlm, type LlmConfig } from './llmRefinement';
+import type { LlmCandidate } from './llmRefinement';
 
 // Point PDF.js at its worker (bundled via Vite/CDN)
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -43,7 +45,16 @@ const MAX_HEADING_CHARS = 200;
 /** Confidence threshold below which a node becomes "Unknown" */
 const UNKNOWN_CONFIDENCE_THRESHOLD = 0.4;
 
-// ── Internal types ────────────────────────────────────────────────
+// ── Options ───────────────────────────────────────────────────────
+
+export interface ExtractTocOptions {
+  /** When provided, a secondary LLM pass refines confidence & levels */
+  llmConfig?: LlmConfig;
+  /** Abort signal forwarded to the LLM fetch */
+  signal?: AbortSignal;
+  /** Progress callback: (step, total steps) */
+  onProgress?: (step: string) => void;
+}
 
 interface RawLine {
   text: string;
@@ -84,11 +95,15 @@ function nodeId(): string {
 // ── Main extractor ────────────────────────────────────────────────
 
 export async function extractToc(
-  pdf: pdfjsLib.PDFDocumentProxy
+  pdf: pdfjsLib.PDFDocumentProxy,
+  options?: ExtractTocOptions
 ): Promise<TocNode[]> {
   _nodeSeq = 0;
 
+  const onProgress = options?.onProgress;
+
   // ── Step 1: collect all text items across all pages ──────────────
+  onProgress?.('Reading PDF text…');
   const rawLines: RawLine[] = [];
 
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
@@ -118,6 +133,7 @@ export async function extractToc(
   const bodySize = modalFontSize(rawLines);
 
   // ── Step 3: filter heading candidates ────────────────────────────
+  onProgress?.('Filtering heading candidates…');
   const candidates = rawLines.filter((l) => {
     if (l.fontSize < MIN_HEADING_SIZE) return false;
     if (l.fontSize < bodySize + HEADING_SIZE_DELTA && !l.bold) return false;
@@ -141,8 +157,26 @@ export async function extractToc(
 
   if (dedupedCandidates.length === 0) return [];
 
+  // ── Step 3c: collapse running page headers ────────────────────────
+  // A heading that repeats on consecutive pages (gap ≤ 2) is a running
+  // header printed at the top of each page in a section — not a new TOC
+  // entry. Keep only the first occurrence per text.
+  const runningHeaderSeen = new Map<string, number>(); // text → last page kept
+  const filteredCandidates = dedupedCandidates.filter((c) => {
+    const key = c.text.toLowerCase().trim();
+    const lastPage = runningHeaderSeen.get(key);
+    if (lastPage !== undefined && c.page - lastPage <= 2) {
+      // Same heading on a nearby page → running header, skip it
+      return false;
+    }
+    runningHeaderSeen.set(key, c.page);
+    return true;
+  });
+
+  if (filteredCandidates.length === 0) return [];
+
   // ── Step 4: cluster font sizes → heading levels ───────────────────
-  const uniqueSizes = [...new Set(dedupedCandidates.map((c) => c.fontSize))].sort(
+  const uniqueSizes = [...new Set(filteredCandidates.map((c) => c.fontSize))].sort(
     (a, b) => b - a
   ); // descending: largest = level 1
 
@@ -151,8 +185,9 @@ export async function extractToc(
     sizeToLevel.set(size, idx + 1);
   });
 
-  // ── Step 5: assign confidence & "Unknown" label ───────────────────
-  const flatNodes: TocNode[] = dedupedCandidates.map((c) => {
+  // ── Step 5: assign confidence (heuristic) ─────────────────────────
+  onProgress?.('Scoring candidates…');
+  const flatNodes: TocNode[] = filteredCandidates.map((c) => {
     const level = sizeToLevel.get(c.fontSize) ?? 1;
 
     // Confidence heuristic: large delta from body = high confidence
@@ -165,7 +200,7 @@ export async function extractToc(
 
     return {
       id: nodeId(),
-      label: isAmbiguous ? `Unknown: ${c.text}` : c.text,
+      label: c.text,
       level,
       page: c.page,
       confidence,
@@ -174,6 +209,51 @@ export async function extractToc(
       manual: false,
     };
   });
+
+  // ── Step 5b: secondary LLM pass (optional) ───────────────────────
+  // Per PLAN § 3.2. The LLM refines confidence, corrects levels, and
+  // filters false positives — it never generates text.
+  if (options?.llmConfig) {
+    onProgress?.('Running LLM refinement pass…');
+    try {
+      const llmCandidates: LlmCandidate[] = flatNodes.map((n) => ({
+        text: n.label,
+        page: n.page,
+        heuristicConfidence: n.confidence,
+        heuristicLevel: n.level,
+      }));
+
+      const refinements = await refineTocWithLlm(
+        llmCandidates,
+        options.llmConfig,
+        options.signal,
+        (done, total) => onProgress?.(`LLM refinement: ${done}/${total} candidates…`)
+      );
+
+      // Merge: update confidence/level from LLM; drop non-headings
+      const mergedNodes = flatNodes
+        .map((n) => {
+          const key = `${n.page}::${n.label}`;
+          const r = refinements.get(key);
+          if (!r) return n; // LLM didn't return this entry → keep heuristic
+          if (!r.isHeading) return null; // LLM says not a heading → drop
+          return {
+            ...n,
+            level: r.level,
+            confidence: r.confidence,
+            status: (r.confidence < UNKNOWN_CONFIDENCE_THRESHOLD
+              ? 'unknown'
+              : 'confirmed') as TocNode['status'],
+          };
+        })
+        .filter((n): n is TocNode => n !== null);
+
+      return buildHierarchy(mergedNodes);
+    } catch (err) {
+      // LLM pass failed entirely — fall back to heuristic result
+      console.warn('[extractToc] LLM pass failed, using heuristic result:', err);
+    }
+  }
 
   // ── Step 6: build hierarchy ───────────────────────────────────────
   return buildHierarchy(flatNodes);

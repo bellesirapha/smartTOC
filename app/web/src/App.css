@@ -87,7 +87,31 @@
   display: flex;
   overflow: hidden;
 }
+.app__llm-btn {
+  padding: 6px 12px;
+  background: #313244;
+  color: #a6adc8;
+  border: 1px solid #45475a;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
 
+.app__llm-btn:hover {
+  background: #45475a;
+  color: #cdd6f4;
+}
+
+.app__llm-btn--active {
+  border-color: #89b4fa;
+  color: #89b4fa;
+}
+
+.app__llm-btn--active:hover {
+  background: rgba(137, 180, 250, 0.1);
+}
 /* ── Drop zone ───────────────────────────────────────────────── */
 
 .app__dropzone {

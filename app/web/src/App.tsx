@@ -1,11 +1,17 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { AiDisclosureBanner } from './components/AiDisclosureBanner';
 import { PdfViewer } from './components/PdfViewer';
 import { TocTree } from './components/TocTree';
 import { AuditTrailPane } from './components/AuditTrailPane';
+import { LlmConfigModal } from './components/LlmConfigModal';
 import type { AppState, TocNode } from './types';
 import { extractToc, loadPdf, flattenToc } from './lib/tocExtractor';
 import { appendEvent, createAuditLog } from './lib/auditLog';
+import {
+  type LlmConfig,
+  loadLlmConfig,
+  saveLlmConfig,
+  clearLlmConfig,
+} from './lib/llmRefinement';
 import './App.css';
 
 const INITIAL_STATE: AppState = {
@@ -23,6 +29,9 @@ export default function App() {
   const [state, setState] = useState<AppState>(INITIAL_STATE);
   const [tocWidth, setTocWidth] = useState(280);
   const [resizing, setResizing] = useState(false);
+  const [llmConfig, setLlmConfig] = useState<LlmConfig | null>(loadLlmConfig);
+  const [showLlmModal, setShowLlmModal] = useState(false);
+  const [generationStatus, setGenerationStatus] = useState('');
   const isResizing = useRef(false);
   const workspaceRef = useRef<HTMLDivElement>(null);
   // Store the loaded PDFDocumentProxy so generation can be deferred
@@ -41,7 +50,9 @@ export default function App() {
       if (!isResizing.current || !workspaceRef.current) return;
       const rect = workspaceRef.current.getBoundingClientRect();
       const auditOffset = state.auditPaneOpen ? AUDIT_WIDTH : 0;
-      const maxToc = rect.width - PDF_MIN - auditOffset - 6; // 6 = handle width
+      const maxTocByPdf = rect.width - PDF_MIN - auditOffset - 6; // 6 = handle width
+      const maxTocByPct = Math.floor(rect.width * 0.30);
+      const maxToc = Math.min(maxTocByPdf, maxTocByPct);
       const newWidth = Math.min(Math.max(ev.clientX - rect.left, TOC_MIN), maxToc);
       setTocWidth(newWidth);
     };
@@ -75,23 +86,29 @@ export default function App() {
     const pdf = pdfProxyRef.current;
     if (!pdf) return;
     const fileName = state.pdfFile?.name ?? 'document';
+    setGenerationStatus('Starting…');
     setState((s) => ({ ...s, generating: true, tocNodes: [], auditLog: createAuditLog() }));
     try {
-      const nodes = await extractToc(pdf);
+      const nodes = await extractToc(pdf, {
+        llmConfig: llmConfig ?? undefined,
+        onProgress: (step) => setGenerationStatus(step),
+      });
+      setGenerationStatus('');
       setState((s) => ({
         ...s,
         tocNodes: nodes,
         generating: false,
         auditLog: appendEvent(
           s.auditLog, 'generated',
-          `AI generated TOC with ${flattenToc(nodes).length} entries from "${fileName}"`
+          `${llmConfig ? 'AI+LLM' : 'AI'} generated TOC with ${flattenToc(nodes).length} entries from "${fileName}"`
         ),
       }));
     } catch (err) {
+      setGenerationStatus('');
       setState((s) => ({ ...s, generating: false }));
       console.error('TOC extraction failed:', err);
     }
-  }, [state.pdfFile]);
+  }, [state.pdfFile, llmConfig]);
 
   const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -104,10 +121,6 @@ export default function App() {
     if (file) handleFileSelected(file);
     e.target.value = '';
   }, [handleFileSelected]);
-
-  const handleAcknowledge = useCallback(() => {
-    setState((s) => ({ ...s, acknowledged: true }));
-  }, []);
 
   const handleNodesChange = useCallback((nodes: TocNode[]) => {
     setState((s) => ({
@@ -175,26 +188,40 @@ export default function App() {
   }, []);
 
   const handleSave = useCallback(() => {
-    if (!state.acknowledged) {
-      alert('Please acknowledge the AI-generated content warning before saving.');
-      return;
-    }
     setState((s) => ({
       ...s,
       auditLog: appendEvent(s.auditLog, 'saved', 'TOC saved by user'),
     }));
     alert('TOC saved. (PDF bookmark embedding requires a server-side component — audit log updated.)');
-  }, [state.acknowledged]);
+  }, []);
 
   const hasToc = state.tocNodes.length > 0 || state.generating;
   const pdfReady = !!state.pdfUrl && !state.generating;
 
+  function handleLlmSave(config: LlmConfig) {
+    saveLlmConfig(config);
+    setLlmConfig(config);
+    setShowLlmModal(false);
+  }
+
+  function handleLlmSkip() {
+    setShowLlmModal(false);
+  }
+
+  function handleLlmClear() {
+    clearLlmConfig();
+    setLlmConfig(null);
+    setShowLlmModal(false);
+  }
+
   return (
     <div className={`app${resizing ? ' app--resizing' : ''}`}>
-      {hasToc && (
-        <AiDisclosureBanner
-          acknowledged={state.acknowledged}
-          onAcknowledge={handleAcknowledge}
+      {showLlmModal && (
+        <LlmConfigModal
+          initial={llmConfig}
+          onSave={handleLlmSave}
+          onSkip={handleLlmSkip}
+          onClear={handleLlmClear}
         />
       )}
 
@@ -204,14 +231,13 @@ export default function App() {
           Upload PDF
           <input type="file" accept="application/pdf" onChange={handleFileInput} style={{ display: 'none' }} />
         </label>
-        {hasToc && (
-          <button
-            className={`app__save-btn ${!state.acknowledged ? 'app__save-btn--disabled' : ''}`}
-            onClick={handleSave}
-          >
-            💾 Save TOC
-          </button>
-        )}
+        <button
+          className={`app__llm-btn ${llmConfig ? 'app__llm-btn--active' : ''}`}
+          onClick={() => setShowLlmModal(true)}
+          title={llmConfig ? `LLM refinement active (${llmConfig.provider})` : 'Configure LLM refinement'}
+        >
+          {llmConfig ? '🧠 LLM ✓' : '🧠 LLM'}
+        </button>
       </div>
 
       <div className="app__workspace" ref={workspaceRef} onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
@@ -241,6 +267,8 @@ export default function App() {
                 onNodeDeleted={handleNodeDeleted}
                 onNodeConfirmed={handleNodeConfirmed}
                 generating={state.generating}
+                generationStatus={generationStatus}
+                onSave={hasToc ? handleSave : undefined}
               />
             </div>
             <div

@@ -126,7 +126,8 @@ export const SortableTocItem: React.FC<Props> = ({
           <span
             className="toc-item__label"
             onClick={() => onClick(node)}
-            title={`Page ${node.page}`}
+            onDoubleClick={(e) => { e.stopPropagation(); setDraft(node.label); setEditing(true); }}
+            title={`Double-click to edit · Page ${node.page}`}
           >
             {isUnknown && (
               <button
@@ -162,18 +163,6 @@ export const SortableTocItem: React.FC<Props> = ({
 
         {/* Actions */}
         <div className="toc-item__actions">
-          {!editing && (
-            <button
-              className="toc-item__btn"
-              onClick={() => {
-                setDraft(node.label);
-                setEditing(true);
-              }}
-              title="Edit label"
-            >
-              ✏
-            </button>
-          )}
           <button
             className="toc-item__btn toc-item__btn--delete"
             onClick={() => onDelete(node.id)}

@@ -3,7 +3,7 @@
 > **Status**: Active task breakdown
 > **Derived from**: [SPEC.md](SPEC.md) · [PLAN.md](PLAN.md)
 > **Governed by**: [CONSTITUTION.md](CONSTITUTION.md)
-> **Last updated**: 2026-02-27
+> **Last updated**: 2026-02-28
 
 ---
 
@@ -48,9 +48,10 @@
 | T-021 | Implement deterministic heading classifier (primary signals: font size, weight, spatial layout, repetition) | T-020 | `[x]` |
 | T-022 | Build hierarchy normalisation pass (resolve inconsistent heading levels) | T-021 | `[x]` |
 | T-023 | Implement ambiguity detection — flag nodes that cannot be confidently classified | T-022 | `[x]` |
-| T-024 | Label ambiguous nodes as **"Unknown"** in TOC output | T-023 | `[x]` |
+| T-024 | Flag ambiguous nodes (confidence < 40%) with `?` badge; preserve heading text verbatim (no "Unknown" prefix) | T-023 | `[x]` |
 | T-025 | Assign confidence score per TOC node | T-023 | `[x]` |
-| T-026 | Optional LLM secondary pass for hierarchy normalisation + ambiguity (structure-only output, no free text) | T-022 | `[ ]` |
+| T-026 | LLM secondary pass (OpenAI / Azure) for confidence score + heading level refinement (structure-only output, no free text); configurable via LLM Config modal | T-022 | `[x]` |
+| T-026a | Deduplicate running page headers repeated across consecutive pages (gap ≤ 2) | T-021 | `[x]` |
 | T-027 | Validate: same PDF + same settings always produces identical TOC (determinism test) | T-021 | `[ ]` |
 | T-028 | Validate: zero hallucinated headings against ground-truth test PDFs (hard gate) | T-026 | `[ ]` |
 
@@ -61,11 +62,11 @@
 | ID | Task | Blocked by | Status |
 |----|------|-----------|--------|
 | T-030 | Build TOC Tree component — hierarchical, collapsible, page-number annotated | T-022 | `[x]` |
-| T-031 | Render "Unknown" nodes with distinct visual style in TOC tree | T-030 | `[x]` |
-| T-032 | Display confidence score indicator per TOC node | T-030 T-025 | `[x]` |
-| T-033 | Implement drag-and-drop reordering within TOC tree (HTML5 DnD or lightweight lib) | T-030 | `[x]` |
+| T-031 | Render confidence badge per TOC node: `?` (low, < 40%), numeric `%` (medium/high), `✓` after user confirmation | T-030 T-025 | `[x]` |
+| T-032 | ~~Superseded by T-031~~ | — | `[x]` |
+| T-033 | Implement drag-and-drop reordering within TOC tree (`@dnd-kit`) | T-030 | `[x]` |
 | T-034 | Implement drag-and-drop re-nesting (change parent-child relationships) | T-033 | `[ ]` |
-| T-035 | Inline rename / edit label for any TOC node | T-030 | `[x]` |
+| T-035 | Inline rename / edit label via **double-click** (Enter/blur to save, Escape to cancel) | T-030 | `[x]` |
 | T-036 | Delete TOC nodes manually (remove unwanted AI-detected entries) | T-030 | `[x]` |
 
 ---
@@ -76,9 +77,9 @@
 
 | ID | Task | Blocked by | Status |
 |----|------|-----------|--------|
-| T-040 | Implement persistent AI-generated warning banner — visible at all times, not permanently dismissible | T-030 | `[x]` |
-| T-041 | Implement acknowledgement modal — user must confirm AI-generated nature before first save/export | T-040 | `[x]` |
-| T-042 | Block save/export until acknowledgement is confirmed in current session | T-041 | `[x]` |
+| T-040 | Implement persistent AI-generated warning note — anchored at bottom of TOC pane, visible at all times, not permanently dismissible | T-030 | `[x]` |
+| T-041 | ~~Acknowledgement modal removed~~ — save gate removed per UX change | — | `[-]` |
+| T-042 | ~~Block save until acknowledgement~~ — save gate removed per UX change | — | `[-]` |
 
 ---
 
@@ -117,11 +118,11 @@
 | T-071 | Run hallucination check: 0% fabricated headings (hard gate — any failure blocks ship) | T-028 T-070 | `[ ]` |
 | T-072 | Measure precision: ≥ 95% correct headings / total headings | T-071 | `[ ]` |
 | T-073 | Measure hierarchy accuracy: ≥ 90% correct parent-child mappings | T-071 | `[ ]` |
-| T-074 | Measure Unknown recall: ≥ 99% of ambiguous sections labeled | T-071 | `[ ]` |
+| T-074 | Measure low-confidence badge coverage: ≥ 99% of ambiguous sections flagged with `?` (no "Unknown" prefix) | T-071 | `[ ]` |
 | T-075 | Verify edit success: user can fully correct every AI error via UI | T-036 | `[ ]` |
 | T-076 | Verify persistence: TOC survives reopen + share (100%) | T-064 | `[ ]` |
 | T-077 | Verify audit completeness: no missing creator/editor fields (hard gate) | T-061 | `[ ]` |
-| T-078 | Verify AI disclosure warning: visible at all times, acknowledgement required before save/export | T-042 | `[ ]` |
+| T-078 | Verify AI disclosure warning: visible at all times at bottom of TOC pane; no acknowledgement gate before save | T-040 | `[ ]` |
 | T-079 | Full deployment smoke test on Azure Static Web Apps | T-005 T-060 | `[ ]` |
 
 ---
@@ -131,10 +132,10 @@
 | Gate | Task |
 |------|------|
 | Zero hallucinated headings | T-071 |
-| Incorrect hierarchy with no "Unknown" fallback blocked | T-074 |
+| Incorrect hierarchy with no low-confidence badge fallback | T-074 |
 | TOC not regenerated without user consent | T-027 |
 | No missing creator/editor metadata | T-077 |
-| AI disclosure warning present and acknowledged before save/export | T-078 |
+| AI disclosure warning present at all times (no save gate required) | T-078 |
 
 ---
 

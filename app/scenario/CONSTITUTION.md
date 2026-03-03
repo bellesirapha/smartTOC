@@ -2,7 +2,7 @@
 
 > **Status**: Governing document — supersedes all other design, product, and engineering decisions where there is conflict.
 > **Source**: Extracted from PRD § 1. CONSTITUTION
-> **Last updated**: 2026-02-27
+> **Last updated**: 2026-02-28
 
 ---
 
@@ -33,7 +33,7 @@ This Constitution defines the **non-negotiable, highest-order constraints** for 
 ### 3. No Hallucinations, Ever
 
 - The system must **never invent** headings, sub-headings, or structure.
-- Unclear sections must be labeled explicitly as **"Unknown"**.
+- Unclear sections must be **flagged with a low-confidence badge** (`?`). The heading text is preserved verbatim from the PDF — no "Unknown" prefix is added. Users can confirm a flagged entry (converts badge to `✓`) or edit/delete it.
 - This is a hard gate — any fabricated heading is a blocker for ship.
 
 ---
@@ -42,7 +42,7 @@ This Constitution defines the **non-negotiable, highest-order constraints** for 
 
 - The UI must display a **prominent, persistent warning** that the TOC is AI-generated and may not be accurate.
 - This warning must be **visible at all times** when viewing AI-generated output and must **not be permanently dismissible**.
-- Users must **explicitly acknowledge** the AI-generated nature of the content before saving or exporting.
+- The warning is **anchored at the bottom of the TOC pane**. No acknowledgement gate is required before saving.
 
 ---
 

@@ -21,7 +21,7 @@ const OPENAI_DEFAULT_MODEL = 'gpt-4o-mini';
 const AZURE_MODEL_PLACEHOLDER = '(determined by Azure endpoint)';
 
 export const LlmConfigModal: React.FC<Props> = ({ initial, onSave, onSkip, onClear }) => {
-  const [provider, setProvider] = useState<'openai' | 'azure'>(
+  const [provider, setProvider] = useState<'openai' | 'azure' | 'github'>(
     initial?.provider ?? 'openai'
   );
   const [apiKey, setApiKey] = useState(initial?.apiKey ?? '');
@@ -71,6 +71,16 @@ export const LlmConfigModal: React.FC<Props> = ({ initial, onSave, onSkip, onCle
                 <input
                   type="radio"
                   name="provider"
+                  value="github"
+                  checked={provider === 'github'}
+                  onChange={() => setProvider('github')}
+                />
+                GitHub Models (free)
+              </label>
+              <label className="llm-modal__radio-label">
+                <input
+                  type="radio"
+                  name="provider"
                   value="openai"
                   checked={provider === 'openai'}
                   onChange={() => setProvider('openai')}
@@ -102,7 +112,13 @@ export const LlmConfigModal: React.FC<Props> = ({ initial, onSave, onSkip, onCle
                 type={showKey ? 'text' : 'password'}
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder={provider === 'openai' ? 'sk-...' : 'Your Azure API key'}
+                placeholder={
+                  provider === 'azure'
+                    ? 'Your Azure API key'
+                    : provider === 'github'
+                    ? 'ghp_... (GitHub personal access token)'
+                    : 'sk-...'
+                }
                 autoComplete="off"
                 spellCheck={false}
               />
@@ -135,8 +151,8 @@ export const LlmConfigModal: React.FC<Props> = ({ initial, onSave, onSkip, onCle
             </div>
           )}
 
-          {/* Model (OpenAI only) */}
-          {provider === 'openai' && (
+          {/* Model (OpenAI and GitHub) */}
+          {(provider === 'openai' || provider === 'github') && (
             <div className="llm-modal__field">
               <label className="llm-modal__label" htmlFor="llm-model">
                 Model <span className="llm-modal__optional">(optional)</span>

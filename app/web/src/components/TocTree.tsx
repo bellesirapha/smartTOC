@@ -41,6 +41,8 @@ interface Props {
   /** True when a PDF is loaded and ready for generation */
   pdfReady: boolean;
   generating: boolean;
+  /** True while the secondary LLM verification pass is running */
+  llmRefining?: boolean;
   /** Live progress text during generation (from extractToc onProgress) */
   generationStatus?: string;
   /** Save callback — shown in footer when TOC exists */
@@ -73,6 +75,7 @@ export const TocTree: React.FC<Props> = ({
   onGenerateToc,
   pdfReady,
   generating,
+  llmRefining,
   generationStatus,
   onSave,
 }) => {
@@ -123,6 +126,12 @@ export const TocTree: React.FC<Props> = ({
       {generating && (
         <div className="toc-tree__generating">
           {generationStatus || 'Generating TOC…'}
+        </div>
+      )}
+
+      {llmRefining && (
+        <div className="toc-tree__llm-refining">
+          🤖 {generationStatus || 'AI verifying headings…'}
         </div>
       )}
 

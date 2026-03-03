@@ -32,7 +32,7 @@ This Constitution is the highest-order constraint. All product, design, and engi
 4.  **Transparent AI Disclosure**
     *   The UI must display a **prominent, persistent warning** that the TOC is AI-generated and may not be accurate.
     *   This warning must be visible at all times when viewing AI-generated output, not dismissible permanently.
-    *   Users must acknowledge the AI-generated nature of the content before saving or exporting.
+    *   The warning is anchored at the bottom of the TOC pane. No acknowledgement gate is required before saving.
 
 5.  **Deterministic Persistence**
     *   Once saved, the TOC must be embedded in the PDF and reused.
@@ -180,15 +180,32 @@ An AI-assisted PDF TOC generator that:
 
 ### 4.1 Quality Dimensions
 
-| Dimension          | Metric                            | Ship Threshold     |
-| ------------------ | --------------------------------- | ------------------ |
-| Hallucination Rate | % of invented headings            | **0% (hard gate)** |
-| Precision          | Correct headings / total headings | ≥ 95%              |
-| Hierarchy Accuracy | Correct parent-child mappings     | ≥ 90%              |
-| Low-confidence Coverage | Ambiguous sections flagged with `?` badge | ≥ 99% recall |
-| Edit Success       | User can fix AI errors            | 100%               |
-| Persistence        | TOC survives reopen/share         | 100%               |
-| Audit Completeness | Missing audit fields              | 0                  |
+Automated metrics are evaluated using `evaluate_toc.py` against a gold TOC in two label modes:
+- **Strict** — preserves leading numbering/prefixes; case-insensitive, whitespace-collapsed
+- **Loose** — strips common numbering tokens; tests semantic heading recognition
+
+#### Automated Rubric Metrics
+
+| Dimension | Metric | Definition | Label Mode | 🟢 Good — Ship | 🟡 OK — Needs Prompt Fix | 🔴 Bad — Major Issue |
+| --------- | ------ | ---------- | ---------- | -------------- | ------------------------ | -------------------- |
+| Hallucination Rate | Precision (Strict) | \|G ∩ P\| / \|P\| — low precision = invented headings | Strict | **≥ 0.85** | 0.70–0.84 | < 0.70 |
+| Recall | Recall (Strict) | \|G ∩ P\| / \|G\| — low recall = missed headings | Strict | **≥ 0.80** | 0.65–0.79 | < 0.65 |
+| Heading F1 | F1 (Strict) | 2·Precision·Recall / (Precision + Recall) | Strict | **≥ 0.82** | 0.70–0.81 | < 0.70 |
+| Page Accuracy | PageExact@Match | Fraction of matched headings with exact page number | Strict | **≥ 0.70** | 0.50–0.69 | < 0.50 |
+| Page Drift | PageMAE | Mean absolute error in page numbers for matched headings | Strict | **≤ 2 pages** | 2–4 pages | > 4 pages |
+| Hierarchy Accuracy | TreeSimilarity (Strict) | 1 − TED(normalized); TED = Zhang–Shasha ordered tree edit distance | Strict | **≥ 0.75** | 0.60–0.74 | < 0.60 |
+| Hierarchy Edit Cost | TED (normalized) | TED / max(\|nodes\_gold\|, \|nodes\_pred\|) | Strict | **≤ 0.25** | 0.26–0.40 | > 0.40 |
+| Hallucinated Count | Hallucinated Count | Fake headings AI invented (not present in document) | Strict | **0–2** | 3–6 | > 6 |
+| Omitted Count | Omitted Count | Real headings the AI missed | Strict | **≤ 15% of gold** | 16–30% | > 30% |
+
+#### Product Quality Dimensions
+
+| Dimension | Metric | 🟢 Good — Ship | 🟡 OK — Needs Fix | 🔴 Bad — Blocker |
+| --------- | ------ | -------------- | ----------------- | ---------------- |
+| Low-confidence Coverage | Ambiguous sections flagged with `?` badge | TBD | TBD | TBD |
+| Edit Success | User can fix any AI error via UI | 100% | — | < 100% |
+| Persistence | TOC survives reopen/share | 100% | — | < 100% |
+| Audit Completeness | Missing audit fields per generated TOC | 0 | — | > 0 |
 
 ***
 
@@ -203,7 +220,7 @@ An AI-assisted PDF TOC generator that:
 
 **Warnings (Allowed with Mitigation)**
 
-*   Overuse of “Unknown” (>30%)
+*   Overuse of low-confidence badge (`?`) (>30%)
 *   Manual editing required for >20% of headings
 
 ***

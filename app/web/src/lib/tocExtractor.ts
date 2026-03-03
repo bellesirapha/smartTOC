@@ -294,6 +294,78 @@ export function flattenToc(nodes: TocNode[]): TocNode[] {
   return result;
 }
 
+// ── Two-phase public API ──────────────────────────────────────────
+
+/**
+ * Phase 1 — deterministic heuristic extraction only (no LLM).
+ *
+ * Returns results immediately so the caller can show them in the UI
+ * before kicking off the optional LLM refinement pass.
+ */
+export async function extractTocHeuristic(
+  pdf: pdfjsLib.PDFDocumentProxy,
+  options?: Pick<ExtractTocOptions, 'signal' | 'onProgress'>
+): Promise<TocNode[]> {
+  // Delegate to extractToc without an llmConfig to get heuristic-only result
+  return extractToc(pdf, { signal: options?.signal, onProgress: options?.onProgress });
+}
+
+/**
+ * Phase 2 — LLM refinement applied to an already-extracted node tree.
+ *
+ * Takes the hierarchical result from Phase 1, flattens it, sends candidates
+ * to the LLM, merges the refinements, and returns a corrected hierarchy.
+ *
+ * CONSTITUTION constraints honoured: text is never modified; only
+ * confidence/level are updated and false-positive nodes are dropped.
+ */
+export async function refineTocNodesWithLlm(
+  nodes: TocNode[],
+  llmConfig: LlmConfig,
+  options?: Pick<ExtractTocOptions, 'signal' | 'onProgress'>
+): Promise<TocNode[]> {
+  const onProgress = options?.onProgress;
+
+  const flat = flattenToc(nodes);
+  if (flat.length === 0) return nodes;
+
+  onProgress?.('Running LLM verification pass…');
+
+  const llmCandidates: LlmCandidate[] = flat.map((n) => ({
+    text: n.label,
+    page: n.page,
+    heuristicConfidence: n.confidence,
+    heuristicLevel: n.level,
+  }));
+
+  const refinements = await refineTocWithLlm(
+    llmCandidates,
+    llmConfig,
+    options?.signal,
+    (done, total) => onProgress?.(`LLM verification: ${done}/${total} candidates…`)
+  );
+
+  const mergedFlat = flat
+    .map((n) => {
+      const key = `${n.page}::${n.label}`;
+      const r = refinements.get(key);
+      if (!r) return { ...n, children: [] }; // keep heuristic, clear stale children
+      if (!r.isHeading) return null;          // LLM says not a heading → drop
+      return {
+        ...n,
+        children: [],                          // always clear — buildHierarchy re-nests
+        level: r.level,
+        confidence: r.confidence,
+        status: (r.confidence < UNKNOWN_CONFIDENCE_THRESHOLD
+          ? 'unknown'
+          : 'confirmed') as TocNode['status'],
+      };
+    })
+    .filter((n): n is TocNode => n !== null);
+
+  return buildHierarchy(mergedFlat);
+}
+
 /** Load a PDF from a URL or ArrayBuffer */
 export async function loadPdf(
   source: string | ArrayBuffer

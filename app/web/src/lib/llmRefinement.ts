@@ -19,14 +19,14 @@
 // ── Public config type (persisted in sessionStorage) ─────────────
 
 export interface LlmConfig {
-  provider: 'openai' | 'azure';
+  provider: 'openai' | 'azure' | 'github';
   apiKey: string;
   /**
    * Azure only — full chat completions URL, e.g.:
    * https://<resource>.openai.azure.com/openai/deployments/<deploy>/chat/completions?api-version=2024-08-01-preview
    */
   azureEndpoint?: string;
-  /** Model name. Defaults to "gpt-4o-mini" (OpenAI) or ignored for Azure (baked into endpoint). */
+  /** Model name. Defaults to "gpt-4o-mini" (OpenAI/GitHub) or ignored for Azure (baked into endpoint). */
   model?: string;
 }
 
@@ -61,14 +61,33 @@ Each candidate has: text (verbatim from PDF), page number, heuristic_confidence,
 
 Your task:
 1. Decide whether each candidate is a genuine section heading or a false positive
-   (footer, running header, caption, body sentence, etc.).
+   (footer, running header, caption, body sentence, table cell, disclaimer text, etc.).
 2. Assign a refined confidence score 0.0–1.0.
-3. Assign the correct heading level (1 = top-level chapter, 2 = sub-section, …).
+3. Assign the correct heading level (1 = top-level chapter, 2 = sub-section, 3 = sub-sub-section).
 
-STRICT RULES — violating any rule makes output invalid:
+HEADING DETECTION SIGNALS (treat as strong positive indicators):
+- Starts with a numeric prefix: "1.", "2.3", "4.1.2", "Appendix A.", "Section 3"
+- All-caps short phrase that is a document title or major section name
+- Bold text that is shorter than a typical sentence (< 80 characters)
+- A line that is significantly larger or bolder than surrounding body text
+
+FALSE POSITIVE SIGNALS (treat as strong negative indicators):
+- Repeated identical text on every page (running header/footer)
+- Contains a page number inline (e.g. "Page 3 of 30")
+- Longer than 120 characters (likely a body sentence)
+- Legal disclaimers, copyright notices, or boilerplate notices
+- Table column headers or cell contents
+
+HIERARCHY RULES:
+- Numbered prefix depth determines level: "1." → level 1, "1.1" → level 2, "1.1.1" → level 3
+- Appendix entries belong at level 1 even if labeled "Appendix A"
+- Document title / cover page text is level 1
+- If numbering is absent, infer level from font size relative to siblings
+
+STRICT OUTPUT RULES — violating any rule makes output invalid:
 - DO NOT invent, modify, rephrase, translate, or truncate any "text" value.
 - DO NOT add entries absent from the input.
-- Return ONLY a JSON array — no markdown, no prose, no wrapper keys.
+- Return a JSON object with a single key "headings" containing the array.
 - Each element must be exactly:
   { "text": <unchanged string>, "page": <integer>, "confidence": <float 0–1>, "level": <integer ≥1>, "is_heading": <boolean> }
 - Preserve original document order.
@@ -111,6 +130,10 @@ async function callApi(
     url = config.azureEndpoint;
     headers['api-key'] = config.apiKey;
     // Azure deployment ignores the model field in the body — remove it to avoid confusion
+  } else if (config.provider === 'github') {
+    // GitHub Models — OpenAI-compatible endpoint, free tier via GitHub token
+    url = 'https://models.inference.ai.azure.com/chat/completions';
+    headers['Authorization'] = `Bearer ${config.apiKey}`;
   } else {
     url = 'https://api.openai.com/v1/chat/completions';
     headers['Authorization'] = `Bearer ${config.apiKey}`;
@@ -254,4 +277,26 @@ export function clearLlmConfig(): void {
   } catch {
     // ignore
   }
+}
+
+/**
+ * Load LLM config from Vite environment variables (VITE_LLM_*).
+ * Used to pre-configure the app without requiring user input.
+ * Falls back to null if no env vars are set.
+ */
+export function loadEnvLlmConfig(): LlmConfig | null {
+  const provider = import.meta.env.VITE_LLM_PROVIDER as string | undefined;
+  const apiKey = import.meta.env.VITE_LLM_API_KEY as string | undefined;
+  const model = import.meta.env.VITE_LLM_MODEL as string | undefined;
+  const azureEndpoint = import.meta.env.VITE_LLM_AZURE_ENDPOINT as string | undefined;
+
+  if (!provider || !apiKey) return null;
+  if (provider !== 'openai' && provider !== 'azure' && provider !== 'github') return null;
+
+  return {
+    provider,
+    apiKey,
+    ...(model ? { model } : {}),
+    ...(azureEndpoint ? { azureEndpoint } : {}),
+  };
 }

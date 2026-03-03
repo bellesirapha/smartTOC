@@ -4,10 +4,12 @@ import { TocTree } from './components/TocTree';
 import { AuditTrailPane } from './components/AuditTrailPane';
 import { LlmConfigModal } from './components/LlmConfigModal';
 import type { AppState, TocNode } from './types';
-import { extractToc, loadPdf, flattenToc } from './lib/tocExtractor';
+import { extractTocHeuristic, refineTocNodesWithLlm, loadPdf, flattenToc } from './lib/tocExtractor';
+import { tocNodesToMarkdown } from './lib/tocMarkdown';
 import { appendEvent, createAuditLog } from './lib/auditLog';
 import {
   type LlmConfig,
+  loadEnvLlmConfig,
   loadLlmConfig,
   saveLlmConfig,
   clearLlmConfig,
@@ -29,13 +31,40 @@ export default function App() {
   const [state, setState] = useState<AppState>(INITIAL_STATE);
   const [tocWidth, setTocWidth] = useState(280);
   const [resizing, setResizing] = useState(false);
-  const [llmConfig, setLlmConfig] = useState<LlmConfig | null>(loadLlmConfig);
+  // LLM config: prefer env vars, fall back to sessionStorage, or prompt user
+  const [llmConfig, setLlmConfig] = useState<LlmConfig | null>(
+    () => loadEnvLlmConfig() ?? loadLlmConfig()
+  );
+  const [llmRefining, setLlmRefining] = useState(false);
   const [showLlmModal, setShowLlmModal] = useState(false);
   const [generationStatus, setGenerationStatus] = useState('');
   const isResizing = useRef(false);
   const workspaceRef = useRef<HTMLDivElement>(null);
   // Store the loaded PDFDocumentProxy so generation can be deferred
   const pdfProxyRef = useRef<Awaited<ReturnType<typeof loadPdf>> | null>(null);
+  // Holds heuristic nodes while waiting for the user to configure LLM
+  const pendingHeuristicNodesRef = useRef<TocNode[] | null>(null);
+
+  // ── Eval: silently save TOC markdown + run evaluate_toc.py ──────
+  const saveTocForEval = useCallback((nodes: TocNode[], fileName: string) => {
+    if (nodes.length === 0) return;
+    const docTitle = fileName.replace(/\.pdf$/i, '');
+    const markdown = tocNodesToMarkdown(nodes, docTitle);
+    fetch('/api/save-toc', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ markdown }),
+    })
+      .then((r) => r.json())
+      .then((result) => {
+        if (result.evalOutput) {
+          console.groupCollapsed('[smartTOC eval] Results — ' + new Date().toLocaleTimeString());
+          console.log(result.evalOutput);
+          console.groupEnd();
+        }
+      })
+      .catch(() => { /* eval endpoint only available in dev */ });
+  }, []);
 
   const TOC_MIN = 180;
   const PDF_MIN = 400;
@@ -82,33 +111,82 @@ export default function App() {
     }
   }, []);
 
-  const handleGenerateToc = useCallback(async () => {
-    const pdf = pdfProxyRef.current;
-    if (!pdf) return;
-    const fileName = state.pdfFile?.name ?? 'document';
-    setGenerationStatus('Starting…');
-    setState((s) => ({ ...s, generating: true, tocNodes: [], auditLog: createAuditLog() }));
+  // ── Phase 2: LLM verification pass on top of heuristic nodes ────
+  const runLlmRefinementPass = useCallback(async (
+    heuristicNodes: TocNode[],
+    config: LlmConfig,
+    fileName: string
+  ) => {
+    setLlmRefining(true);
+    setGenerationStatus('Verifying with AI…');
     try {
-      const nodes = await extractToc(pdf, {
-        llmConfig: llmConfig ?? undefined,
+      const refinedNodes = await refineTocNodesWithLlm(heuristicNodes, config, {
         onProgress: (step) => setGenerationStatus(step),
       });
       setGenerationStatus('');
       setState((s) => ({
         ...s,
-        tocNodes: nodes,
-        generating: false,
+        tocNodes: refinedNodes,
         auditLog: appendEvent(
-          s.auditLog, 'generated',
-          `${llmConfig ? 'AI+LLM' : 'AI'} generated TOC with ${flattenToc(nodes).length} entries from "${fileName}"`
+          s.auditLog,
+          'generated',
+          `LLM verified and refined TOC to ${flattenToc(refinedNodes).length} entries from "${fileName}"`
         ),
       }));
+      saveTocForEval(refinedNodes, fileName);
+    } catch (err) {
+      setGenerationStatus('');
+      console.warn('[App] LLM refinement pass failed, keeping heuristic result:', err);
+    } finally {
+      setLlmRefining(false);
+    }
+  }, [saveTocForEval]);
+
+  // ── Phase 1: deterministic extraction → show immediately ─────────
+  const handleGenerateToc = useCallback(async () => {
+    const pdf = pdfProxyRef.current;
+    if (!pdf) return;
+    const fileName = state.pdfFile?.name ?? 'document';
+
+    setGenerationStatus('Starting…');
+    setState((s) => ({ ...s, generating: true, tocNodes: [], auditLog: createAuditLog() }));
+
+    let heuristicNodes: TocNode[] = [];
+    try {
+      heuristicNodes = await extractTocHeuristic(pdf, {
+        onProgress: (step) => setGenerationStatus(step),
+      });
     } catch (err) {
       setGenerationStatus('');
       setState((s) => ({ ...s, generating: false }));
       console.error('TOC extraction failed:', err);
+      return;
     }
-  }, [state.pdfFile, llmConfig]);
+
+    // Show heuristic result immediately — user sees headings right away
+    setGenerationStatus('');
+    setState((s) => ({
+      ...s,
+      tocNodes: heuristicNodes,
+      generating: false,
+      auditLog: appendEvent(
+        s.auditLog,
+        'generated',
+        `Extracted ${flattenToc(heuristicNodes).length} heading candidates from "${fileName}" (heuristic pass)`
+      ),
+    }));
+
+    // Phase 2 — LLM verification
+    if (llmConfig) {
+      await runLlmRefinementPass(heuristicNodes, llmConfig, fileName);
+      // saveTocForEval is called inside runLlmRefinementPass after success
+    } else {
+      // No LLM config — save heuristic result for eval and prompt user
+      saveTocForEval(heuristicNodes, fileName);
+      pendingHeuristicNodesRef.current = heuristicNodes;
+      setShowLlmModal(true);
+    }
+  }, [state.pdfFile, llmConfig, runLlmRefinementPass, saveTocForEval]);
 
   const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -179,6 +257,29 @@ export default function App() {
   }, []);
 
 
+  const handleLlmModalSave = useCallback((config: LlmConfig) => {
+    saveLlmConfig(config);
+    setLlmConfig(config);
+    setShowLlmModal(false);
+    const pending = pendingHeuristicNodesRef.current;
+    pendingHeuristicNodesRef.current = null;
+    if (pending) {
+      const fileName = state.pdfFile?.name ?? 'document';
+      void runLlmRefinementPass(pending, config, fileName);
+    }
+  }, [runLlmRefinementPass, state.pdfFile]);
+
+  const handleLlmModalSkip = useCallback(() => {
+    pendingHeuristicNodesRef.current = null;
+    setShowLlmModal(false);
+  }, []);
+
+  const handleLlmModalClear = useCallback(() => {
+    clearLlmConfig();
+    setLlmConfig(null);
+    setShowLlmModal(false);
+  }, []);
+
   const handleAuditTrailOpen = useCallback(() => {
     setState((s) => ({ ...s, auditPaneOpen: true }));
   }, []);
@@ -198,46 +299,14 @@ export default function App() {
   const hasToc = state.tocNodes.length > 0 || state.generating;
   const pdfReady = !!state.pdfUrl && !state.generating;
 
-  function handleLlmSave(config: LlmConfig) {
-    saveLlmConfig(config);
-    setLlmConfig(config);
-    setShowLlmModal(false);
-  }
-
-  function handleLlmSkip() {
-    setShowLlmModal(false);
-  }
-
-  function handleLlmClear() {
-    clearLlmConfig();
-    setLlmConfig(null);
-    setShowLlmModal(false);
-  }
-
   return (
     <div className={`app${resizing ? ' app--resizing' : ''}`}>
-      {showLlmModal && (
-        <LlmConfigModal
-          initial={llmConfig}
-          onSave={handleLlmSave}
-          onSkip={handleLlmSkip}
-          onClear={handleLlmClear}
-        />
-      )}
-
       <div className="app__toolbar">
         <span className="app__brand">📑 smartTOC</span>
         <label className="app__upload-btn">
           Upload PDF
           <input type="file" accept="application/pdf" onChange={handleFileInput} style={{ display: 'none' }} />
         </label>
-        <button
-          className={`app__llm-btn ${llmConfig ? 'app__llm-btn--active' : ''}`}
-          onClick={() => setShowLlmModal(true)}
-          title={llmConfig ? `LLM refinement active (${llmConfig.provider})` : 'Configure LLM refinement'}
-        >
-          {llmConfig ? '🧠 LLM ✓' : '🧠 LLM'}
-        </button>
       </div>
 
       <div className="app__workspace" ref={workspaceRef} onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
@@ -267,6 +336,7 @@ export default function App() {
                 onNodeDeleted={handleNodeDeleted}
                 onNodeConfirmed={handleNodeConfirmed}
                 generating={state.generating}
+                llmRefining={llmRefining}
                 generationStatus={generationStatus}
                 onSave={hasToc ? handleSave : undefined}
               />
@@ -287,6 +357,14 @@ export default function App() {
           </>
         )}
       </div>
+      {showLlmModal && (
+        <LlmConfigModal
+          initial={llmConfig}
+          onSave={handleLlmModalSave}
+          onSkip={handleLlmModalSkip}
+          onClear={handleLlmModalClear}
+        />
+      )}
     </div>
   );
 }

@@ -4,7 +4,7 @@
 > **Source**: Extracted from PRD § 3. PLAN
 > **Governed by**: [CONSTITUTION.md](CONSTITUTION.md)
 > **Spec reference**: [SPEC.md](SPEC.md)
-> **Last updated**: 2026-02-27
+> **Last updated**: 2026-02-28
 
 ---
 
@@ -14,8 +14,11 @@
 |---------|--------|-------|
 | Framework | React or vanilla TS + Web Components | Keep dependency footprint minimal |
 | PDF Rendering | PDF.js | Client-side, no server required |
-| TOC UI | Tree-based navigation component | Must support drag-and-drop reordering and re-nesting |
-| Drag-and-drop | HTML5 DnD or lightweight library | Avoid heavy dependencies |
+| TOC UI | Tree-based navigation component | Must support drag-and-drop reordering and re-nesting; inline label editing; confidence badges |
+| Drag-and-drop | `@dnd-kit` | Reorder and re-nest TOC entries |
+| Inline label editing | Double-click to edit, Enter/blur to save, Escape to cancel | No separate edit button |
+| Confidence badges | `?` (low, < 40%), numeric `%` (medium/high), `✓` after user confirmation | Per TOC node |
+| LLM secondary pass | Optional OpenAI / Azure call for confidence + level refinement | Configurable via LLM Config modal |
 
 ### UI Layout
 
@@ -28,6 +31,9 @@
 │                 │                        │
 │  [View Audit    │                        │
 │   Trail]        │                        │
+│                 │                        │
+│  [Save to PDF]  │                        │
+│  ⚠ AI-generated │                        │
 └─────────────────┴────────────────────────┘
 ```
 
@@ -74,9 +80,10 @@ Applied only after deterministic extraction:
 
 ### Ambiguity Handling
 
-- Any section that cannot be confidently classified → labeled **"Unknown"**
-- "Unknown" nodes are surfaced to the user for manual correction
+- Any section that cannot be confidently classified (confidence < 40%) → flagged with a **`?` badge** (heading text preserved verbatim)
+- Users can confirm a flagged entry (`✓`) or edit/delete it
 - The system must never silently discard or guess ambiguous sections
+- Running page headers repeated across consecutive pages (gap ≤ 2) are automatically deduplicated to a single entry
 
 ---
 

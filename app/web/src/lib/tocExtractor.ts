@@ -237,13 +237,21 @@ export async function extractToc(
           const r = refinements.get(key);
           if (!r) return n; // LLM didn't return this entry → keep heuristic
           if (!r.isHeading) return null; // LLM says not a heading → drop
+          // Rescore: LLM-confirmed headings get a minimum confidence floor so
+          // verified entries don't remain in the "low" band.
+          // Numeric-prefixed headings (e.g. "1.1 Key Contacts") get ≥ 80%;
+          // all other confirmed headings get ≥ 65%.
+          const numericPrefix = /^\d+(\.[\d]+)*[\s\.\)]/;
+          const minFloor = numericPrefix.test(n.label) ? 0.80 : 0.65;
+          const rescored = Math.max(r.confidence, minFloor);
           return {
             ...n,
             level: r.level,
-            confidence: r.confidence,
-            status: (r.confidence < UNKNOWN_CONFIDENCE_THRESHOLD
+            confidence: rescored,
+            status: (rescored < UNKNOWN_CONFIDENCE_THRESHOLD
               ? 'unknown'
               : 'confirmed') as TocNode['status'],
+            refined: true,
           };
         })
         .filter((n): n is TocNode => n !== null);
@@ -349,16 +357,17 @@ export async function refineTocNodesWithLlm(
     .map((n) => {
       const key = `${n.page}::${n.label}`;
       const r = refinements.get(key);
-      if (!r) return { ...n, children: [] }; // keep heuristic, clear stale children
+      if (!r) return { ...n, children: [] as TocNode[] }; // keep heuristic, clear stale children
       if (!r.isHeading) return null;          // LLM says not a heading → drop
       return {
         ...n,
-        children: [],                          // always clear — buildHierarchy re-nests
+        children: [] as TocNode[],             // always clear — buildHierarchy re-nests
         level: r.level,
         confidence: r.confidence,
         status: (r.confidence < UNKNOWN_CONFIDENCE_THRESHOLD
           ? 'unknown'
           : 'confirmed') as TocNode['status'],
+        refined: true,
       };
     })
     .filter((n): n is TocNode => n !== null);

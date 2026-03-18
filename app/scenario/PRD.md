@@ -75,8 +75,9 @@ An AI-assisted PDF TOC generator that:
     *   Based strictly on observable document signals (layout, typography, structure)
     *   Running page headers repeated across consecutive pages are automatically collapsed to a single entry
 2.  **Explicitly marks uncertainty**
-    *   Ambiguous entries (confidence < 40%) are flagged with a `?` badge; high-confidence entries show a numeric confidence percentage
-    *   Users can confirm a flagged entry (`✓`) without editing its text
+    *   Ambiguous entries (confidence < 40%) are flagged with a `?` badge; entries show a **confidence label**: `Low` (< 40%), `Mid` (40–74%), `High` (≥ 75%), or `Verified` (user-confirmed, 100%)
+    *   After the LLM pass, LLM-confirmed headings receive a minimum confidence floor (≥ 80% for numerically-prefixed entries, ≥ 65% for others)
+    *   Users can confirm a flagged entry (`✓`) — sets confidence to 100% (`Verified`). A **Confirm All** button confirms all entries at once
 3.  **Allows manual refinement**
     *   Drag-and-drop reordering of hierarchy
     *   **Double-click** any label to edit it inline (Enter to save, Escape to cancel)
@@ -107,7 +108,7 @@ An AI-assisted PDF TOC generator that:
 ### 2.4 In-Scope Features
 
 *   AI-generated TOC (headings + hierarchy)
-*   Confidence badges on each TOC entry (`?` low / numeric % high)
+*   Confidence badges on each TOC entry — **confidence labels**: `Low` (< 40%), `Mid` (40–74%), `High` (≥ 75%), `Verified` (user-confirmed, 100%); LLM-verified scores show `·AI` suffix and outline ring with source / tier / signal tooltip; LLM-confirmed headings receive a minimum confidence floor (≥ 80% numeric-prefixed, ≥ 65% others); **Confirm All** button sets all entries to `Verified` (100%)
 *   User confirmation of low-confidence entries
 *   Drag-and-drop TOC editing
 *   Inline label editing via double-click
@@ -139,11 +140,12 @@ An AI-assisted PDF TOC generator that:
     *   Tree-based navigation component
     *   Drag-and-drop reordering (`@dnd-kit`)
     *   Inline label editing: **double-click** to edit, Enter/blur to save, Escape to cancel
-    *   Confidence badge system: `?` (low, < 40%), numeric `%` (medium/high); `✓` after user confirmation
+    *   Confidence badge system: **confidence labels**: `Low` (< 40%), `Mid` (40–74%), `High` (≥ 75%); `Verified` (100%) after user confirmation via individual `✓` click or **Confirm All** button
 *   **LLM Config**:
     *   Optional secondary AI pass via LLM Config modal
     *   Supported providers: **GitHub Models** (free tier), **OpenAI**, **Azure OpenAI**
     *   API key stored in sessionStorage only; never persisted to disk
+    *   Nodes updated by the LLM pass carry `refined: true`; the UI shows a `·AI` suffix and tooltip with source, tier, and key signals; LLM-confirmed headings receive a minimum confidence floor (≥ 80% for numerically-prefixed headings, ≥ 65% for others)
 
 ### 3.2 AI / TOC Generation Layer
 

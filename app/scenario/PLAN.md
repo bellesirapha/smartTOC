@@ -17,7 +17,7 @@
 | TOC UI | Tree-based navigation component | Must support drag-and-drop reordering and re-nesting; inline label editing; confidence badges |
 | Drag-and-drop | `@dnd-kit` | Reorder and re-nest TOC entries |
 | Inline label editing | Double-click to edit, Enter/blur to save, Escape to cancel | No separate edit button |
-| Confidence badges | `?` (low, < 40%), numeric `%` (medium/high), `✓` after user confirmation | Per TOC node |
+| Confidence badges | **Confidence labels**: `Low` (< 40%), `Mid` (40–74%), `High` (≥ 75%), `Verified` (user-confirmed, 100%); individual `?` badge click or **Confirm All** footer button sets entry/entries to `Verified` (100%); LLM-confirmed headings receive a minimum floor (≥ 80% numeric-prefixed, ≥ 65% others); LLM-verified nodes show `·AI` suffix + outline ring; tooltip shows source, tier, and key signals | Per TOC node |
 | LLM secondary pass | Optional GitHub Models / OpenAI / Azure call for confidence + level refinement | Configurable via LLM Config modal |
 
 ### UI Layout
@@ -93,6 +93,18 @@ Applied only after deterministic extraction; results shown to the user from Phas
 - Users can confirm a flagged entry (`✓`) or edit/delete it
 - The system must never silently discard or guess ambiguous sections
 - Running page headers repeated across consecutive pages (gap ≤ 2) are automatically deduplicated to a single entry
+
+### LLM-Verified Confidence Signal
+
+Nodes updated by the Phase 2 LLM pass have `refined: true` on the `TocNode` record. The UI reflects this:
+
+| Visual element | Meaning |
+|---|---|
+| `·AI` suffix on badge | Confidence score set by LLM (not heuristic-only) |
+| Outline ring on badge | Same; distinguishes LLM-refined from heuristic-only at a glance |
+| Tooltip — Source | "LLM-verified" or "Heuristic (font size / weight)" |
+| Tooltip — Tier | High (≥ 75%) / Mid (40–74%) / Low — flagged for review (< 40%) |
+| Tooltip — Signals | Key evidence: numeric prefix, bold/large font, phrase length, ambiguous structure |
 
 ---
 

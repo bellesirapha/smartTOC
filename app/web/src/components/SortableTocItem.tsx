@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -42,6 +42,11 @@ export const SortableTocItem: React.FC<Props> = ({
   const [draft, setDraft] = useState(node.label);
   const [collapsed, setCollapsed] = useState(false);
 
+  // Keep draft in sync when node label is updated externally (e.g. after LLM pass)
+  useEffect(() => {
+    if (!editing) setDraft(node.label);
+  }, [node.label, editing]);
+
   const sensors = useSensors(useSensor(PointerSensor));
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -83,6 +88,38 @@ export const SortableTocItem: React.FC<Props> = ({
   const confidencePct = Math.round(node.confidence * 100);
   const isUnknown = node.status === 'unknown';
   const isUserConfirmed = node.status === 'user_confirmed';
+  const isRefined = !!node.refined;
+
+  /**
+   * Build a tooltip that explains confidence criteria:
+   * - Source: LLM-verified vs. heuristic-only
+   * - Tier: what the score means
+   * - Key signals that drive the score
+   */
+  function confidenceTooltip(pct: number, refined: boolean): string {
+    const source = refined
+      ? 'LLM-verified'
+      : 'Heuristic (font size / weight)';
+    let tier: string;
+    let signals: string;
+    if (pct >= 75) {
+      tier = 'High';
+      signals = refined
+        ? 'Signals: numeric prefix, bold/large font, short phrase'
+        : 'Signals: large font delta, bold weight';
+    } else if (pct >= 40) {
+      tier = 'Medium';
+      signals = refined
+        ? 'Signals: likely heading but ambiguous structure'
+        : 'Signals: moderate font delta or bold only';
+    } else {
+      tier = 'Low — flagged for review';
+      signals = refined
+        ? 'Signals: ambiguous (no numeric prefix, not distinctly bold/large)'
+        : 'Signals: small font delta, not bold';
+    }
+    return `Confidence: ${pct}% · ${tier}\nSource: ${source}\n${signals}`;
+  }
 
   return (
     <li
@@ -154,10 +191,11 @@ export const SortableTocItem: React.FC<Props> = ({
         {/* Confidence */}
         {!node.manual && (
           <span
-            className={`toc-item__confidence toc-item__confidence--${confidenceClass(node.confidence)}`}
-            title={`Confidence: ${confidencePct}%`}
+            className={`toc-item__confidence toc-item__confidence--${confidenceClass(node.confidence, node.status)}${isRefined && !isUserConfirmed ? ' toc-item__confidence--refined' : ''}`}
+            title={confidenceTooltip(confidencePct, isRefined)}
           >
-            {confidencePct}%
+            {confidenceLabel(node.confidence, node.status)}
+            {isRefined && !isUserConfirmed && <span className="toc-item__confidence-ai" aria-label="LLM-verified">·AI</span>}
           </span>
         )}
 
@@ -205,10 +243,18 @@ export const SortableTocItem: React.FC<Props> = ({
   );
 };
 
-function confidenceClass(c: number): string {
+function confidenceClass(c: number, status?: string): string {
+  if (status === 'user_confirmed') return 'verified';
   if (c >= 0.75) return 'high';
   if (c >= 0.4) return 'medium';
   return 'low';
+}
+
+function confidenceLabel(c: number, status?: string): string {
+  if (status === 'user_confirmed') return 'Verified';
+  if (c >= 0.75) return 'High';
+  if (c >= 0.4) return 'Mid';
+  return 'Low';
 }
 
 

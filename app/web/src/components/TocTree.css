@@ -88,6 +88,15 @@
   50% { opacity: 0.55; }
 }
 
+.toc-tree__llm-verified {
+  padding: 5px 12px;
+  background: rgba(137, 180, 250, 0.08);
+  border-bottom: 1px solid rgba(137, 180, 250, 0.2);
+  color: #89b4fa;
+  font-size: 11px;
+  text-align: center;
+}
+
 .toc-tree__list {
   list-style: none;
   margin: 0;
@@ -108,8 +117,29 @@
   background: #1e1e2e;
 }
 
+.toc-tree__footer-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.toc-tree__confirm-all-btn {
+  flex: 1;
+  padding: 7px 0;
+  background: rgba(166, 227, 161, 0.15);
+  color: #a6e3a1;
+  border: 1px solid rgba(166, 227, 161, 0.4);
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.toc-tree__confirm-all-btn:hover {
+  background: rgba(166, 227, 161, 0.25);
+}
+
 .toc-tree__save-btn {
-  width: 100%;
+  flex: 1;
   padding: 7px 0;
   background: #45475a;
   color: #cdd6f4;

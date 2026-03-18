@@ -38,6 +38,8 @@ export default function App() {
   const [llmRefining, setLlmRefining] = useState(false);
   const [showLlmModal, setShowLlmModal] = useState(false);
   const [generationStatus, setGenerationStatus] = useState('');
+  /** Count of nodes whose confidence was updated by the LLM pass (cleared on new generation) */
+  const [llmRefinedCount, setLlmRefinedCount] = useState<{ refined: number; total: number } | null>(null);
   const isResizing = useRef(false);
   const workspaceRef = useRef<HTMLDivElement>(null);
   // Store the loaded PDFDocumentProxy so generation can be deferred
@@ -124,13 +126,16 @@ export default function App() {
         onProgress: (step) => setGenerationStatus(step),
       });
       setGenerationStatus('');
+      const flat = flattenToc(refinedNodes);
+      const refinedCount = flat.filter((n) => n.refined).length;
+      setLlmRefinedCount({ refined: refinedCount, total: flat.length });
       setState((s) => ({
         ...s,
         tocNodes: refinedNodes,
         auditLog: appendEvent(
           s.auditLog,
           'generated',
-          `LLM verified and refined TOC to ${flattenToc(refinedNodes).length} entries from "${fileName}"`
+          `LLM verified and refined TOC to ${flat.length} entries (${refinedCount} confidence scores updated) from "${fileName}"`
         ),
       }));
       saveTocForEval(refinedNodes, fileName);
@@ -149,6 +154,7 @@ export default function App() {
     const fileName = state.pdfFile?.name ?? 'document';
 
     setGenerationStatus('Starting…');
+    setLlmRefinedCount(null);
     setState((s) => ({ ...s, generating: true, tocNodes: [], auditLog: createAuditLog() }));
 
     let heuristicNodes: TocNode[] = [];
@@ -239,6 +245,17 @@ export default function App() {
         ),
       };
     });
+  }, []);
+
+  const handleConfirmAll = useCallback(() => {
+    setState((s) => ({
+      ...s,
+      tocNodes: confirmAllNodes(s.tocNodes),
+      auditLog: appendEvent(
+        s.auditLog, 'confirmed_unknown',
+        'User confirmed all TOC entries (Confirm All)'
+      ),
+    }));
   }, []);
 
   const handleNodeConfirmed = useCallback((nodeId: string) => {
@@ -335,9 +352,11 @@ export default function App() {
                 onNodeEdited={handleNodeEdited}
                 onNodeDeleted={handleNodeDeleted}
                 onNodeConfirmed={handleNodeConfirmed}
+                onConfirmAll={handleConfirmAll}
                 generating={state.generating}
                 llmRefining={llmRefining}
                 generationStatus={generationStatus}
+                llmRefinedCount={llmRefinedCount}
                 onSave={hasToc ? handleSave : undefined}
               />
             </div>
@@ -369,10 +388,19 @@ export default function App() {
   );
 }
 
+function confirmAllNodes(nodes: TocNode[]): TocNode[] {
+  return nodes.map((n) => ({
+    ...n,
+    status: n.manual ? n.status : 'user_confirmed' as const,
+    confidence: n.manual ? n.confidence : 1.0,
+    children: confirmAllNodes(n.children),
+  }));
+}
+
 function confirmNodeStatus(nodes: TocNode[], id: string): TocNode[] {
   return nodes.map((n) =>
     n.id === id
-      ? { ...n, status: 'user_confirmed' as const }
+      ? { ...n, status: 'user_confirmed' as const, confidence: 1.0 }
       : { ...n, children: confirmNodeStatus(n.children, id) }
   );
 }

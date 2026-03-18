@@ -29,7 +29,7 @@ An AI-assisted PDF TOC generator that:
 | # | Capability | Detail |
 |---|-----------|--------|
 | 1 | **Generates a hierarchical TOC** | Based strictly on observable document signals (layout, typography, structure) |
-| 2 | **Explicitly marks uncertainty** | Ambiguous entries (confidence < 40%) are flagged with a `?` badge; high-confidence entries show a numeric confidence %. Users can confirm a flagged entry (`✓`) without editing its text. Running page headers repeated across consecutive pages are automatically collapsed to a single entry. |
+| 2 | **Explicitly marks uncertainty** | Ambiguous entries (confidence < 40%) are flagged with a `?` badge; entries show a **confidence label**: `Low` (< 40%), `Mid` (40–74%), `High` (≥ 75%), or `Verified` (user-confirmed, 100%). After the LLM pass, LLM-confirmed headings receive a minimum confidence floor (≥ 80% for numerically-prefixed entries, ≥ 65% for others). Users can confirm a flagged entry (`✓`) without editing its text — this sets confidence to 100% (`Verified`). A **Confirm All** button in the footer confirms all entries at once. Running page headers repeated across consecutive pages are automatically collapsed to a single entry. |
 | 3 | **Allows manual refinement** | Drag-and-drop reordering of hierarchy; **double-click** any label to edit it inline (Enter to save, Escape to cancel) |
 | 4 | **Persists results** | Saves TOC directly into the PDF |
 | 5 | **Tracks provenance** | Full audit trail of generation and edits |
@@ -97,7 +97,7 @@ Per [CONSTITUTION § 4 — Transparent AI Disclosure](CONSTITUTION.md):
 | Feature | Description |
 |---------|-------------|
 | AI-generated TOC | Headings + hierarchy extracted from PDF; running page headers auto-deduplicated across consecutive pages |
-| Confidence badges | Each entry shows `?` (low confidence, < 40%) or numeric `%` (medium/high); user can confirm a flagged entry (`✓`) |
+| Confidence badges | Each entry shows a **confidence label**: `Low` (< 40%), `Mid` (40–74%), `High` (≥ 75%), or `Verified` (user-confirmed, 100%); user can confirm a flagged entry (`✓`) to set it to `Verified` (100%). **Confirm All** button in the footer confirms all entries at once. After the LLM pass, LLM-confirmed headings receive a minimum floor (≥ 80% for numerically-prefixed, ≥ 65% for others); entries whose confidence was updated by the LLM show a `·AI` suffix and outline ring on the badge; hovering reveals a tooltip with **source** (LLM-verified vs. heuristic), **tier** (High / Mid / Low), and the **key signals** that drove the score. |
 | Inline label editing | Double-click any TOC label to edit inline; Enter/blur to save, Escape to cancel |
 | Drag-and-drop editing | Reorder and re-nest TOC entries (headings and subheadings) detected by AI |
 | LLM secondary pass (two-phase) | Phase 1 heuristic result shown immediately; Phase 2 optional LLM verification (GitHub Models / OpenAI / Azure) runs in background, refines confidence, corrects levels, drops false positives; configurable via LLM Config modal |
@@ -128,6 +128,8 @@ Each in-scope feature must satisfy the following before ship:
 | AI-generated TOC | Zero hallucinated headings (hard gate) |
 | Two-phase extraction | Phase 1 heuristic result visible immediately in TOC pane; Phase 2 LLM pass updates the tree on completion without blocking the user |
 | LLM Config modal | Prompts user to configure provider (GitHub Models / OpenAI / Azure) or skip; if skipped, heuristic result is kept; config persisted in sessionStorage only |
+| LLM-verified confidence indicator | Nodes whose confidence was updated by the LLM pass receive a minimum confidence floor (≥ 80% numeric-prefixed, ≥ 65% others) and show a `·AI` suffix + outline ring on badge; tooltip shows source, tier, and signals |
+| Confirm All | Footer button confirms all non-manual entries at once → all set to `Verified` (100%) |
 | Low-confidence coverage | ≥ 99% recall — ambiguous sections flagged with `?` badge; no "Unknown" text prefix added to heading |
 | Inline label editing | Double-click opens edit mode; Enter/blur saves; Escape cancels |
 | Drag-and-drop editing | User can reorder and re-nest any AI-detected heading or subheading; no manual addition of new entries |

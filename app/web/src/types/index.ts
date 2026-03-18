@@ -21,6 +21,8 @@ export interface TocNode {
   children: TocNode[];
   /** Whether this node was added manually (not by AI) */
   manual: boolean;
+  /** True when confidence was updated by the LLM verification pass (Phase 2) */
+  refined?: boolean;
 }
 
 export type AuditEventKind =

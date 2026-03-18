@@ -36,6 +36,8 @@ interface Props {
   onNodeEdited: (nodeId: string, newLabel: string) => void;
   onNodeDeleted: (nodeId: string) => void;
   onNodeConfirmed: (nodeId: string) => void;
+  /** Confirm all TOC entries at once → sets every node to 100% confidence */
+  onConfirmAll?: () => void;
   /** Trigger TOC generation from the loaded PDF */
   onGenerateToc: () => void;
   /** True when a PDF is loaded and ready for generation */
@@ -47,6 +49,8 @@ interface Props {
   generationStatus?: string;
   /** Save callback — shown in footer when TOC exists */
   onSave?: () => void;
+  /** When set, shows how many nodes had confidence updated by LLM */
+  llmRefinedCount?: { refined: number; total: number } | null;
 }
 
 // Re-export for convenience
@@ -72,12 +76,14 @@ export const TocTree: React.FC<Props> = ({
   onNodeEdited,
   onNodeDeleted,
   onNodeConfirmed,
+  onConfirmAll,
   onGenerateToc,
   pdfReady,
   generating,
   llmRefining,
   generationStatus,
   onSave,
+  llmRefinedCount,
 }) => {
   const sensors = useSensors(useSensor(PointerSensor));
 
@@ -135,6 +141,16 @@ export const TocTree: React.FC<Props> = ({
         </div>
       )}
 
+      {!llmRefining && llmRefinedCount && (
+        <div className="toc-tree__llm-verified">
+          ✦ LLM verified {llmRefinedCount.total} headings
+          {llmRefinedCount.refined > 0 && (
+            <> — <strong>{llmRefinedCount.refined}</strong> confidence scores updated</>
+          )}
+          {llmRefinedCount.refined === 0 && <> — all scores match heuristic</>}
+        </div>
+      )}
+
       {!generating && nodes.length === 0 && (
         <div className="toc-tree__empty">
           {pdfReady
@@ -173,11 +189,22 @@ export const TocTree: React.FC<Props> = ({
 
       {nodes.length > 0 && (
         <div className="toc-tree__footer">
-          {onSave && (
-            <button className="toc-tree__save-btn" onClick={onSave}>
-              💾 Save
-            </button>
-          )}
+          <div className="toc-tree__footer-actions">
+            {onConfirmAll && (
+              <button
+                className="toc-tree__confirm-all-btn"
+                onClick={onConfirmAll}
+                title="Mark all entries as confirmed (100% confidence)"
+              >
+                ✓ Confirm All
+              </button>
+            )}
+            {onSave && (
+              <button className="toc-tree__save-btn" onClick={onSave}>
+                💾 Save
+              </button>
+            )}
+          </div>
           <p className="toc-tree__ai-note">
             ⚠ AI-generated — verify before use
           </p>

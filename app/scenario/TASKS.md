@@ -63,7 +63,9 @@
 | ID | Task | Blocked by | Status |
 |----|------|-----------|--------|
 | T-030 | Build TOC Tree component — hierarchical, collapsible, page-number annotated | T-022 | `[x]` |
-| T-031 | Render confidence badge per TOC node: `?` (low, < 40%), numeric `%` (medium/high), `✓` after user confirmation | T-030 T-025 | `[x]` |
+| T-031 | Render confidence badge per TOC node: `?` badge when low (< 40%), label terms `Low` / `Mid` / `High` / `Verified`; `✓` after individual user confirmation (sets to 100% `Verified`) | T-030 T-025 | `[x]` |
+| T-031a | LLM-verified confidence indicator: LLM-confirmed nodes receive minimum confidence floor (≥ 80% numeric-prefixed, ≥ 65% others); show `·AI` suffix + outline ring; tooltip shows source (LLM-verified vs. heuristic), tier (High / Mid / Low), and key signals | T-031 T-026 | `[x]` |
+| T-031b | **Confirm All** button in TOC footer (same row as Save) — confirms all non-manual entries at once, sets `status: user_confirmed` and `confidence: 1.0` (`Verified`) on every node; recorded in audit log | T-031 | `[x]` |
 | T-032 | ~~Superseded by T-031~~ | — | `[x]` |
 | T-033 | Implement drag-and-drop reordering within TOC tree (`@dnd-kit`) | T-030 | `[x]` |
 | T-034 | Implement drag-and-drop re-nesting (change parent-child relationships) | T-033 | `[ ]` |

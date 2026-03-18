@@ -154,6 +154,28 @@
   color: #f38ba8;
 }
 
+.toc-item__confidence--verified {
+  background: rgba(166, 227, 161, 0.3);
+  color: #a6e3a1;
+  font-weight: 700;
+}
+
+/* LLM-verified badge: blue-tinted outline over the tier colour */
+.toc-item__confidence--refined {
+  outline: 1px solid #89b4fa;
+  outline-offset: -1px;
+}
+
+/* ·AI pill appended inside the badge */
+.toc-item__confidence-ai {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-left: 3px;
+  color: #89b4fa;
+  opacity: 1;
+}
+
 .toc-item__actions {
   display: flex;
   gap: 2px;

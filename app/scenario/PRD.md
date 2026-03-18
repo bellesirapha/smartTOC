@@ -83,8 +83,9 @@ An AI-assisted PDF TOC generator that:
 4.  **Persists results**
     *   Saves TOC directly into the PDF
 5.  **Tracks provenance**
-    *   Full audit trail of generation and edits
-
+    *   Full audit trail of generation and edits6.  **Optional LLM secondary pass**
+    *   GitHub Models, OpenAI, or Azure OpenAI refines confidence scores, corrects heading levels, and filters false positives
+    *   Configurable via LLM Config modal; skippable for fully offline/static use
 ***
 
 ### 2.3 User Experience (High Level)
@@ -110,6 +111,7 @@ An AI-assisted PDF TOC generator that:
 *   User confirmation of low-confidence entries
 *   Drag-and-drop TOC editing
 *   Inline label editing via double-click
+*   LLM secondary pass (GitHub Models / OpenAI / Azure) for confidence refinement and false-positive filtering
 *   Save TOC to PDF (bookmarks / outline)
 *   Audit trail (creator, editor, timestamps)
 *   Static web UI
@@ -138,6 +140,10 @@ An AI-assisted PDF TOC generator that:
     *   Drag-and-drop reordering (`@dnd-kit`)
     *   Inline label editing: **double-click** to edit, Enter/blur to save, Escape to cancel
     *   Confidence badge system: `?` (low, < 40%), numeric `%` (medium/high); `✓` after user confirmation
+*   **LLM Config**:
+    *   Optional secondary AI pass via LLM Config modal
+    *   Supported providers: **GitHub Models** (free tier), **OpenAI**, **Azure OpenAI**
+    *   API key stored in sessionStorage only; never persisted to disk
 
 ### 3.2 AI / TOC Generation Layer
 
@@ -148,10 +154,12 @@ An AI-assisted PDF TOC generator that:
     *   Font weight
     *   Spatial layout
     *   Repetition patterns
-2.  **Secondary AI pass (LLM-assisted)**
+2.  **Secondary AI pass (LLM-assisted, optional)**
     *   Normalize hierarchy
+    *   Filter false positives (footers, running headers, table cells)
     *   Detect ambiguity
-    *   Assign confidence scores
+    *   Refine confidence scores
+    *   Providers: **GitHub Models** (free), **OpenAI**, or **Azure OpenAI** — configurable via LLM Config modal
 
 > LLM output must be **structure-only**, not free text.
 

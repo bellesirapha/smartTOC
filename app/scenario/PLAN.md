@@ -4,7 +4,7 @@
 > **Source**: Extracted from PRD § 3. PLAN
 > **Governed by**: [CONSTITUTION.md](CONSTITUTION.md)
 > **Spec reference**: [SPEC.md](SPEC.md)
-> **Last updated**: 2026-02-28
+> **Last updated**: 2026-03-18
 
 ---
 
@@ -18,7 +18,7 @@
 | Drag-and-drop | `@dnd-kit` | Reorder and re-nest TOC entries |
 | Inline label editing | Double-click to edit, Enter/blur to save, Escape to cancel | No separate edit button |
 | Confidence badges | `?` (low, < 40%), numeric `%` (medium/high), `✓` after user confirmation | Per TOC node |
-| LLM secondary pass | Optional OpenAI / Azure call for confidence + level refinement | Configurable via LLM Config modal |
+| LLM secondary pass | Optional GitHub Models / OpenAI / Azure call for confidence + level refinement | Configurable via LLM Config modal |
 
 ### UI Layout
 
@@ -65,15 +65,24 @@ Extract structure from observable document properties only:
 | Spatial layout | Indentation, margins, whitespace patterns |
 | Repetition patterns | Consistent formatting across sections |
 
-### Step 2 — Secondary AI pass (LLM-assisted)
+### Step 2 — Secondary AI pass (LLM-assisted, optional)
 
-Applied only after deterministic extraction:
+Applied only after deterministic extraction; results shown to the user from Phase 1 immediately while Phase 2 runs in the background:
 
 | Task | Purpose |
 |------|---------|
 | Normalize hierarchy | Resolve inconsistencies in heading levels |
+| Detect false positives | Drop footers, running headers, table cells, disclaimers incorrectly promoted to headings |
 | Detect ambiguity | Flag sections where structure is unclear |
-| Assign confidence scores | Quantify certainty per TOC node |
+| Refine confidence scores | Quantify certainty per TOC node beyond what font-size alone can assess |
+
+**LLM providers supported** (all via LLM Config modal):
+
+| Provider | Notes |
+|----------|-------|
+| **GitHub Models** | Free tier; recommended for first-time use |
+| **OpenAI** | `gpt-4o-mini` default; any compatible model |
+| **Azure OpenAI** | Full endpoint URL required; model baked into endpoint |
 
 > **Constraint**: LLM output must be **structure-only** — no free text, no invented headings, no semantic interpretation.  
 > See [CONSTITUTION § 3 — No Hallucinations, Ever](CONSTITUTION.md).

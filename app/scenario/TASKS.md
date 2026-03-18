@@ -3,7 +3,7 @@
 > **Status**: Active task breakdown
 > **Derived from**: [SPEC.md](SPEC.md) · [PLAN.md](PLAN.md)
 > **Governed by**: [CONSTITUTION.md](CONSTITUTION.md)
-> **Last updated**: 2026-02-28
+> **Last updated**: 2026-03-18
 
 ---
 
@@ -50,8 +50,9 @@
 | T-023 | Implement ambiguity detection — flag nodes that cannot be confidently classified | T-022 | `[x]` |
 | T-024 | Flag ambiguous nodes (confidence < 40%) with `?` badge; preserve heading text verbatim (no "Unknown" prefix) | T-023 | `[x]` |
 | T-025 | Assign confidence score per TOC node | T-023 | `[x]` |
-| T-026 | LLM secondary pass (OpenAI / Azure) for confidence score + heading level refinement (structure-only output, no free text); configurable via LLM Config modal | T-022 | `[x]` |
+| T-026 | LLM secondary pass (GitHub Models / OpenAI / Azure) for confidence score + heading level refinement (structure-only output, no free text); configurable via LLM Config modal | T-022 | `[x]` |
 | T-026a | Deduplicate running page headers repeated across consecutive pages (gap ≤ 2) | T-021 | `[x]` |
+| T-026b | Two-phase extraction: Phase 1 heuristic result shown immediately; Phase 2 LLM verification runs in background and updates if LLM config is available; if no config, LlmConfigModal prompts user | T-026 | `[x]` |
 | T-027 | Validate: same PDF + same settings always produces identical TOC (determinism test) | T-021 | `[ ]` |
 | T-028 | Validate: zero hallucinated headings against ground-truth test PDFs (hard gate) | T-026 | `[ ]` |
 
@@ -114,6 +115,7 @@
 
 | ID | Task | Blocked by | Status |
 |----|------|-----------|--------|
+| T-069 | Implement dev eval pipeline: `POST /api/save-toc` (Vite middleware) saves TOC Markdown to `eval/results/`; auto-runs `evaluate_toc.py --json` and prints colour-coded rubric table to console | T-026 | `[x]` |
 | T-070 | Assemble test PDF corpus (varied layouts, edge cases, ambiguous sections) | — | `[ ]` |
 | T-071 | Run hallucination check: 0% fabricated headings (hard gate — any failure blocks ship) | T-028 T-070 | `[ ]` |
 | T-072 | Measure precision: ≥ 95% correct headings / total headings | T-071 | `[ ]` |

@@ -3,7 +3,7 @@
 > **Status**: Authoritative specification document
 > **Source**: Extracted from PRD § 2. SPEC
 > **Governed by**: [CONSTITUTION.md](CONSTITUTION.md)
-> **Last updated**: 2026-02-28
+> **Last updated**: 2026-03-18
 
 ---
 
@@ -43,8 +43,10 @@ An AI-assisted PDF TOC generator that:
 ```
 1. User opens static web page
 2. User uploads a PDF  (or uses default sample PDF)
-3. AI generates TOC (with live progress status in TOC pane)
-   3a. Optionally: LLM secondary pass (OpenAI / Azure) refines confidence scores and heading levels
+3. Phase 1: heuristic TOC extracted (font size, weight, layout) — result shown immediately in TOC pane
+   3a. Phase 2 (optional): LLM secondary pass  (GitHub Models / OpenAI / Azure) refines confidence scores,
+       corrects heading levels, and drops false positives — runs in background; TOC pane updates on completion
+   3b. If no LLM is configured, LLM Config modal prompts user to set up a provider or skip
 4. UI displays:
    ├── Left pane   → TOC tree (confidence badges; Save button + AI disclosure note anchored at bottom)
    └── Center pane → PDF viewer
@@ -98,7 +100,7 @@ Per [CONSTITUTION § 4 — Transparent AI Disclosure](CONSTITUTION.md):
 | Confidence badges | Each entry shows `?` (low confidence, < 40%) or numeric `%` (medium/high); user can confirm a flagged entry (`✓`) |
 | Inline label editing | Double-click any TOC label to edit inline; Enter/blur to save, Escape to cancel |
 | Drag-and-drop editing | Reorder and re-nest TOC entries (headings and subheadings) detected by AI |
-| LLM secondary pass | Optional OpenAI / Azure call to refine confidence scores and heading levels; configurable via LLM Config modal |
+| LLM secondary pass (two-phase) | Phase 1 heuristic result shown immediately; Phase 2 optional LLM verification (GitHub Models / OpenAI / Azure) runs in background, refines confidence, corrects levels, drops false positives; configurable via LLM Config modal |
 | Save TOC to PDF | Write as PDF bookmarks / outline |
 | Audit trail | Creator, editor, timestamps — immutable; viewable in right pane on demand |
 | Static web UI | No server required for default deployment |
@@ -124,6 +126,8 @@ Each in-scope feature must satisfy the following before ship:
 | Feature | Acceptance Criterion |
 |---------|----------------------|
 | AI-generated TOC | Zero hallucinated headings (hard gate) |
+| Two-phase extraction | Phase 1 heuristic result visible immediately in TOC pane; Phase 2 LLM pass updates the tree on completion without blocking the user |
+| LLM Config modal | Prompts user to configure provider (GitHub Models / OpenAI / Azure) or skip; if skipped, heuristic result is kept; config persisted in sessionStorage only |
 | Low-confidence coverage | ≥ 99% recall — ambiguous sections flagged with `?` badge; no "Unknown" text prefix added to heading |
 | Inline label editing | Double-click opens edit mode; Enter/blur saves; Escape cancels |
 | Drag-and-drop editing | User can reorder and re-nest any AI-detected heading or subheading; no manual addition of new entries |

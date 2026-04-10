@@ -36,8 +36,8 @@ interface Props {
   onNodeEdited: (nodeId: string, newLabel: string) => void;
   onNodeDeleted: (nodeId: string) => void;
   onNodeConfirmed: (nodeId: string) => void;
-  /** Confirm all TOC entries at once → sets every node to 100% confidence */
-  onConfirmAll?: () => void;
+  /** Insert a new node below the given nodeId */
+  onNodeInsertBelow: (nodeId: string) => void;
   /** Trigger TOC generation from the loaded PDF */
   onGenerateToc: () => void;
   /** True when a PDF is loaded and ready for generation */
@@ -68,6 +68,13 @@ function updateNodeChildren(
   });
 }
 
+/** Sort top-level nodes: mapped first, then unknown — returns the index
+ *  where the uncategorized section starts (or -1 if none). */
+function uncategorizedStartIndex(nodes: TocNodeType[]): number {
+  const idx = nodes.findIndex((n) => n.status === 'unknown');
+  return idx;
+}
+
 export const TocTree: React.FC<Props> = ({
   nodes,
   onNodesChange,
@@ -76,7 +83,7 @@ export const TocTree: React.FC<Props> = ({
   onNodeEdited,
   onNodeDeleted,
   onNodeConfirmed,
-  onConfirmAll,
+  onNodeInsertBelow,
   onGenerateToc,
   pdfReady,
   generating,
@@ -87,8 +94,9 @@ export const TocTree: React.FC<Props> = ({
 }) => {
   const sensors = useSensors(useSensor(PointerSensor));
 
-  // Flatten nodes to flat list for sortable context (top-level only for DnD)
   const topLevelIds = nodes.map((n) => n.id);
+  const uncatIdx = uncategorizedStartIndex(nodes);
+  const uncatCount = uncatIdx >= 0 ? nodes.filter((n) => n.status === 'unknown').length : 0;
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -170,17 +178,25 @@ export const TocTree: React.FC<Props> = ({
             strategy={verticalListSortingStrategy}
           >
             <ul className="toc-tree__list">
-              {nodes.map((node) => (
-                <SortableTocItem
-                  key={node.id}
-                  node={node}
-                  depth={0}
-                  onClick={onNodeClick}
-                  onEdit={onNodeEdited}
-                  onDelete={onNodeDeleted}
-                  onConfirm={onNodeConfirmed}
-                  onChildrenChange={handleChildrenChange}
-                />
+              {nodes.map((node, idx) => (
+                <React.Fragment key={node.id}>
+                  {/* Inline divider before number the first uncategorized node */}
+                  {uncatIdx >= 0 && idx === uncatIdx && (
+                    <li className="toc-tree__uncategorized-divider">
+                      Uncategorized ({uncatCount})
+                    </li>
+                  )}
+                  <SortableTocItem
+                    node={node}
+                    depth={0}
+                    onClick={onNodeClick}
+                    onEdit={onNodeEdited}
+                    onDelete={onNodeDeleted}
+                    onConfirm={onNodeConfirmed}
+                    onInsertBelow={onNodeInsertBelow}
+                    onChildrenChange={handleChildrenChange}
+                  />
+                </React.Fragment>
               ))}
             </ul>
           </SortableContext>
@@ -190,15 +206,6 @@ export const TocTree: React.FC<Props> = ({
       {nodes.length > 0 && (
         <div className="toc-tree__footer">
           <div className="toc-tree__footer-actions">
-            {onConfirmAll && (
-              <button
-                className="toc-tree__confirm-all-btn"
-                onClick={onConfirmAll}
-                title="Mark all entries as confirmed (100% confidence)"
-              >
-                ✓ Confirm All
-              </button>
-            )}
             {onSave && (
               <button className="toc-tree__save-btn" onClick={onSave}>
                 💾 Save

@@ -63,8 +63,7 @@ Extract structure from observable document properties only:
 | Font size | Distinguish headings from body text |
 | Font weight | Bold text as a heading indicator |
 | Spatial layout | Indentation, margins, whitespace patterns |
-| Repetition patterns | Consistent formatting across sections |
-
+| Repetition patterns | Consistent formatting across sections || Multi-line merging | Consecutive text items on the same page with identical font size/weight and adjacent Y positions are merged into a single heading (handles word-wrapped titles) |
 ### Step 2 — Secondary AI pass (LLM-assisted, optional)
 
 Applied only after deterministic extraction; results shown to the user from Phase 1 immediately while Phase 2 runs in the background:

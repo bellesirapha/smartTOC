@@ -96,7 +96,7 @@ Per [CONSTITUTION § 4 — Transparent AI Disclosure](CONSTITUTION.md):
 
 | Feature | Description |
 |---------|-------------|
-| AI-generated TOC | Headings + hierarchy extracted from PDF; running page headers auto-deduplicated across consecutive pages |
+| AI-generated TOC | Headings + hierarchy extracted from PDF; multi-line headings (word-wrapped across two or more text items) merged automatically; running page headers auto-deduplicated across consecutive pages |
 | Confidence badges | Each entry shows a **confidence label**: `Low` (< 40%), `Mid` (40–74%), `High` (≥ 75%), or `Verified` (user-confirmed, 100%); user can confirm a flagged entry (`✓`) to set it to `Verified` (100%). **Confirm All** button in the footer confirms all entries at once. After the LLM pass, LLM-confirmed headings receive a minimum floor (≥ 80% for numerically-prefixed, ≥ 65% for others); entries whose confidence was updated by the LLM show a `·AI` suffix and outline ring on the badge; hovering reveals a tooltip with **source** (LLM-verified vs. heuristic), **tier** (High / Mid / Low), and the **key signals** that drove the score. |
 | Inline label editing | Double-click any TOC label to edit inline; Enter/blur to save, Escape to cancel |
 | Drag-and-drop editing | Reorder and re-nest TOC entries (headings and subheadings) detected by AI |

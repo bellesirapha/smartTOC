@@ -105,6 +105,21 @@
   flex: 1;
 }
 
+/* ── Uncategorized inline divider ──────────────────────── */
+
+.toc-tree__uncategorized-divider {
+  list-style: none;
+  padding: 6px 16px;
+  margin-top: 4px;
+  border-top: 1px dashed #45475a;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #f38ba8;
+  user-select: none;
+}
+
 /* ── Footer (Save + AI disclosure) ─────────────────────── */
 
 .toc-tree__footer {
@@ -120,22 +135,6 @@
 .toc-tree__footer-actions {
   display: flex;
   gap: 6px;
-}
-
-.toc-tree__confirm-all-btn {
-  flex: 1;
-  padding: 7px 0;
-  background: rgba(166, 227, 161, 0.15);
-  color: #a6e3a1;
-  border: 1px solid rgba(166, 227, 161, 0.4);
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.toc-tree__confirm-all-btn:hover {
-  background: rgba(166, 227, 161, 0.25);
 }
 
 .toc-tree__save-btn {

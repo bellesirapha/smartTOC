@@ -88,15 +88,16 @@ Each entry must be a Markdown bullet line. Use **exactly** this format:
 ### Example output
 
 ```markdown
-# Table of Contents — Financial Estate Planning Workbook
+# Table of Contents — Cybersecurity Principles: Defending the Digital Landscape
 
-- **1. Household Overview** — p. 3
-  - 1.1 Key Contacts — p. 4
-  - 1.2 Family & Dependents — p. 5
+- **Part I: Security Fundamentals** — p. 2
+  - Chapter 1: The Threat Landscape — p. 2
+    - Types of Cyber Threats — p. 2
+    - Threat Actors and Motivations — p. 2
 
-- **2. Asset Inventory** — p. 7
-  - 2.1 Cash & Banking — p. 8
-  - 2.2 Investments — p. 9
+- **Part II: Application and Cloud Security** — p. 9
+  - Chapter 4: Secure Software Development — p. 9
+    - OWASP Top Ten Vulnerabilities — p. 9
 ```
 
 ---

@@ -10,7 +10,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const APP_EVAL_DIR = resolve(__dirname, '../eval')
 // Results saved to top-level eval/results/ (as requested)
 const RESULTS_DIR = resolve(__dirname, '../../eval/results')
-const GOLD_TOC = join(APP_EVAL_DIR, 'plain text pdf', 'gold_toc_financial_estate.md')
+const GOLD_TOC = join(APP_EVAL_DIR, 'multi column pdf', 'cybersecurity-principles-toc.md')
 const EVAL_SCRIPT = join(APP_EVAL_DIR, 'evaluate_toc.py')
 
 // https://vite.dev/config/

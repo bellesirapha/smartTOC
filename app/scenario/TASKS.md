@@ -46,6 +46,7 @@
 |----|------|-----------|--------|
 | T-020 | Extract text + layout metadata from PDF (font size, weight, position) via PDF.js | T-011 | `[x]` |
 | T-021 | Implement deterministic heading classifier (primary signals: font size, weight, spatial layout, repetition) | T-020 | `[x]` |
+| T-021b | Multi-line heading merge: join consecutive text items on the same page with matching font size/weight and adjacent Y positions into a single heading candidate | T-020 | `[x]` |
 | T-022 | Build hierarchy normalisation pass (resolve inconsistent heading levels) | T-021 | `[x]` |
 | T-023 | Implement ambiguity detection — flag nodes that cannot be confidently classified | T-022 | `[x]` |
 | T-024 | Flag ambiguous nodes (confidence < 40%) with `?` badge; preserve heading text verbatim (no "Unknown" prefix) | T-023 | `[x]` |

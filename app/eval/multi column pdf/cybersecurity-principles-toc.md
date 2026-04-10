@@ -1,0 +1,44 @@
+# Table of Contents — Cybersecurity Principles: Defending the Digital Landscape
+
+- **Part I: Security Fundamentals** — p. 2
+  - Chapter 1: The Threat Landscape — p. 2
+    - Types of Cyber Threats — p. 2
+    - Threat Actors and Motivations — p. 2
+    - Attack Vectors and Kill Chains — p. 3
+    - The Evolving Nature of Cybercrime — p. 3
+  - Chapter 2: Cryptography Essentials — p. 4
+    - Symmetric and Asymmetric Encryption — p. 4
+    - Hash Functions and Digital Signatures — p. 5
+    - Public Key Infrastructure — p. 5
+    - Cryptographic Protocols in Practice — p. 6
+  - Chapter 3: Network Security — p. 7
+    - Firewalls and Intrusion Detection Systems — p. 7
+    - Virtual Private Networks — p. 7
+    - Network Segmentation Strategies — p. 8
+    - Wireless Security Protocols — p. 8
+- **Part II: Application and Cloud Security** — p. 9
+  - Chapter 4: Secure Software Development — p. 9
+    - OWASP Top Ten Vulnerabilities — p. 9
+    - Secure Coding Practices — p. 10
+    - Static and Dynamic Analysis Tools — p. 10
+    - DevSecOps Integration — p. 11
+  - Chapter 5: Cloud Security Architecture — p. 11
+    - Shared Responsibility Model — p. 11
+    - Identity and Access Management — p. 12
+    - Data Protection in the Cloud — p. 13
+    - Container and Serverless Security — p. 13
+  - Chapter 6: Identity Management — p. 14
+    - Authentication Mechanisms — p. 14
+    - Multi-Factor Authentication — p. 14
+    - Single Sign-On and Federation — p. 15
+    - Zero Trust Architecture — p. 16
+- **Part III: Incident Response and Governance** — p. 16
+  - Chapter 7: Incident Response — p. 16
+    - Building an Incident Response Plan — p. 16
+    - Detection and Analysis — p. 17
+    - Containment and Eradication — p. 18
+    - Post-Incident Review — p. 18
+  - Chapter 8: Compliance and Governance — p. 19
+    - Regulatory Frameworks Overview — p. 19
+    - Security Policies and Procedures — p. 19
+    - Audit and Assessment Processes — p. 20

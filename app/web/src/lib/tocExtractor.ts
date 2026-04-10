@@ -129,12 +129,36 @@ export async function extractToc(
 
   if (rawLines.length === 0) return [];
 
+  // ── Step 1b: merge multi-line headings ────────────────────────────
+  // PDF.js often splits a single heading across multiple text items when
+  // it wraps to a new line (e.g. "Part II: Application and" / "Cloud
+  // Security"). We merge consecutive items on the same page that share
+  // the same font size, bold state, and are vertically adjacent.
+  const Y_MERGE_THRESHOLD = 3; // max Y-gap (pt) to consider same line cluster
+  const mergedLines: RawLine[] = [];
+  for (const line of rawLines) {
+    const prev = mergedLines[mergedLines.length - 1];
+    if (
+      prev &&
+      prev.page === line.page &&
+      Math.abs(prev.fontSize - line.fontSize) < 0.5 &&
+      prev.bold === line.bold &&
+      Math.abs(prev.y - line.y) <= prev.fontSize * Y_MERGE_THRESHOLD
+    ) {
+      // Merge: append text, keep the higher Y (first visual line)
+      prev.text = prev.text + ' ' + line.text;
+      prev.y = Math.max(prev.y, line.y);
+    } else {
+      mergedLines.push({ ...line });
+    }
+  }
+
   // ── Step 2: determine body font size ─────────────────────────────
-  const bodySize = modalFontSize(rawLines);
+  const bodySize = modalFontSize(mergedLines);
 
   // ── Step 3: filter heading candidates ────────────────────────────
   onProgress?.('Filtering heading candidates…');
-  const candidates = rawLines.filter((l) => {
+  const candidates = mergedLines.filter((l) => {
     if (l.fontSize < MIN_HEADING_SIZE) return false;
     if (l.fontSize < bodySize + HEADING_SIZE_DELTA && !l.bold) return false;
     if (l.text.length < MIN_HEADING_CHARS) return false;

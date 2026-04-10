@@ -247,15 +247,29 @@ export default function App() {
     });
   }, []);
 
-  const handleConfirmAll = useCallback(() => {
-    setState((s) => ({
-      ...s,
-      tocNodes: confirmAllNodes(s.tocNodes),
-      auditLog: appendEvent(
-        s.auditLog, 'confirmed_unknown',
-        'User confirmed all TOC entries (Confirm All)'
-      ),
-    }));
+  const handleNodeInsertBelow = useCallback((nodeId: string) => {
+    setState((s) => {
+      const refNode = findNode(s.tocNodes, nodeId);
+      const newNode: TocNode = {
+        id: `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        label: 'New Entry',
+        level: refNode?.level ?? 1,
+        page: refNode?.page ?? 1,
+        confidence: 1.0,
+        status: 'user_confirmed',
+        children: [],
+        manual: true,
+      };
+      return {
+        ...s,
+        tocNodes: insertAfterNode(s.tocNodes, nodeId, newNode),
+        auditLog: appendEvent(
+          s.auditLog, 'added',
+          `Inserted new entry below "${refNode?.label ?? nodeId}"`,
+          { nodeId: newNode.id, nodeLabel: newNode.label }
+        ),
+      };
+    });
   }, []);
 
   const handleNodeConfirmed = useCallback((nodeId: string) => {
@@ -352,7 +366,7 @@ export default function App() {
                 onNodeEdited={handleNodeEdited}
                 onNodeDeleted={handleNodeDeleted}
                 onNodeConfirmed={handleNodeConfirmed}
-                onConfirmAll={handleConfirmAll}
+                onNodeInsertBelow={handleNodeInsertBelow}
                 generating={state.generating}
                 llmRefining={llmRefining}
                 generationStatus={generationStatus}
@@ -388,15 +402,6 @@ export default function App() {
   );
 }
 
-function confirmAllNodes(nodes: TocNode[]): TocNode[] {
-  return nodes.map((n) => ({
-    ...n,
-    status: n.manual ? n.status : 'user_confirmed' as const,
-    confidence: n.manual ? n.confidence : 1.0,
-    children: confirmAllNodes(n.children),
-  }));
-}
-
 function confirmNodeStatus(nodes: TocNode[], id: string): TocNode[] {
   return nodes.map((n) =>
     n.id === id
@@ -424,4 +429,16 @@ function findNode(nodes: TocNode[], id: string): TocNode | undefined {
     if (found) return found;
   }
   return undefined;
+}
+
+/** Insert newNode as a sibling immediately after the node with targetId */
+function insertAfterNode(nodes: TocNode[], targetId: string, newNode: TocNode): TocNode[] {
+  const result: TocNode[] = [];
+  for (const n of nodes) {
+    result.push({ ...n, children: insertAfterNode(n.children, targetId, newNode) });
+    if (n.id === targetId) {
+      result.push(newNode);
+    }
+  }
+  return result;
 }

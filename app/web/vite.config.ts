@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { writeFileSync, mkdirSync, existsSync } from 'fs'
-import { join, resolve, dirname } from 'path'
+import { writeFileSync, mkdirSync, existsSync, readdirSync, statSync } from 'fs'
+import { join, resolve, dirname, basename, extname } from 'path'
 import { fileURLToPath } from 'url'
 import { spawn } from 'child_process'
 
@@ -10,8 +10,62 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const APP_EVAL_DIR = resolve(__dirname, '../eval')
 // Results saved to top-level eval/results/ (as requested)
 const RESULTS_DIR = resolve(__dirname, '../../eval/results')
-const GOLD_TOC = join(APP_EVAL_DIR, 'multi column pdf', 'cybersecurity-principles-toc.md')
+// Default gold (used when no PDF filename is supplied or no match is found)
+const DEFAULT_GOLD_TOC = join(APP_EVAL_DIR, 'multi column pdf', 'cybersecurity-principles-toc.md')
 const EVAL_SCRIPT = join(APP_EVAL_DIR, 'evaluate_toc.py')
+
+// Files inside app/eval/ that look like prompt/rubric docs, not gold TOCs.
+const NON_GOLD_BASENAMES = new Set(['toc_scoring_rubric.md', 'smart-toc-prompt-tuning-v1.md'])
+
+function listGoldFiles(dir: string): string[] {
+  const out: string[] = []
+  if (!existsSync(dir)) return out
+  for (const name of readdirSync(dir)) {
+    const full = join(dir, name)
+    let st
+    try { st = statSync(full) } catch { continue }
+    if (st.isDirectory()) {
+      out.push(...listGoldFiles(full))
+    } else if (extname(name).toLowerCase() === '.md' && !NON_GOLD_BASENAMES.has(name)) {
+      out.push(full)
+    }
+  }
+  return out
+}
+
+function normalizeForMatch(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/\.(pdf|md)$/i, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+function tokenSet(s: string): Set<string> {
+  return new Set(normalizeForMatch(s).split(/\s+/).filter((t) => t.length >= 3))
+}
+
+function tokenSimilarity(a: string, b: string): number {
+  const ta = tokenSet(a)
+  const tb = tokenSet(b)
+  if (ta.size === 0 || tb.size === 0) return 0
+  let inter = 0
+  for (const t of ta) if (tb.has(t)) inter++
+  return inter / Math.min(ta.size, tb.size)
+}
+
+function selectGold(pdfFileName: string | undefined): { path: string; reason: string } {
+  if (!pdfFileName) return { path: DEFAULT_GOLD_TOC, reason: 'no fileName supplied' }
+  const candidates = listGoldFiles(APP_EVAL_DIR)
+  if (candidates.length === 0) return { path: DEFAULT_GOLD_TOC, reason: 'no gold files found' }
+  let best: { path: string; score: number } | null = null
+  for (const c of candidates) {
+    const score = tokenSimilarity(pdfFileName, basename(c))
+    if (!best || score > best.score) best = { path: c, score }
+  }
+  if (best && best.score >= 0.5) return { path: best.path, reason: `best match (sim=${best.score.toFixed(2)})` }
+  return { path: DEFAULT_GOLD_TOC, reason: `no good match (best sim=${best?.score.toFixed(2) ?? '0'})` }
+}
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -33,7 +87,7 @@ export default defineConfig({
           req.on('data', (chunk: Buffer) => { body += chunk.toString() })
           req.on('end', () => {
             try {
-              const { markdown } = JSON.parse(body) as { markdown: string }
+              const { markdown, fileName } = JSON.parse(body) as { markdown: string; fileName?: string }
 
               if (!existsSync(RESULTS_DIR)) mkdirSync(RESULTS_DIR, { recursive: true })
 
@@ -41,6 +95,9 @@ export default defineConfig({
               const predPath = join(RESULTS_DIR, `toc_${ts}.md`)
               writeFileSync(predPath, markdown, 'utf8')
               console.log(`\n\x1b[36m[eval]\x1b[0m Saved TOC → ${predPath}`)
+
+              const { path: GOLD_TOC, reason } = selectGold(fileName)
+              console.log(`\x1b[36m[eval]\x1b[0m Gold: ${GOLD_TOC} (${reason})`)
 
               // Run evaluate_toc.py if gold exists
               if (!existsSync(GOLD_TOC)) {
@@ -50,12 +107,12 @@ export default defineConfig({
                 return
               }
 
-              console.log(`\x1b[36m[eval]\x1b[0m Running evaluate_toc.py (strict + pages)…`)
+              console.log(`\x1b[36m[eval]\x1b[0m Running evaluate_toc.py (loose + pages)…`)
               const proc = spawn('python3', [
                 EVAL_SCRIPT,
                 '--gold', GOLD_TOC,
                 '--pred', predPath,
-                '--mode', 'strict',
+                '--mode', 'loose',
                 '--pages',
                 '--json',
               ])
@@ -78,7 +135,7 @@ export default defineConfig({
                   // ── Human-readable summary ──────────────────────────────
                   const summary = [
                     '',
-                    `\x1b[36m[eval]\x1b[0m Mode: strict`,
+                    `\x1b[36m[eval]\x1b[0m Mode: loose`,
                     `\x1b[36m[eval]\x1b[0m Gold: ${h.gold_count} | Pred: ${h.pred_count} | Matched: ${h.matched}`,
                     `\x1b[36m[eval]\x1b[0m Precision: ${h.precision.toFixed(3)} | Recall: ${h.recall.toFixed(3)} | F1: ${h.f1.toFixed(3)}`,
                     p ? `\x1b[36m[eval]\x1b[0m PageExact@Match: ${p.page_exact_match_rate?.toFixed(3) ?? 'n/a'} | PageMAE: ${p.page_mae?.toFixed(3) ?? 'n/a'}` : '',

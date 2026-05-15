@@ -38,8 +38,6 @@ export default function App() {
   const [llmRefining, setLlmRefining] = useState(false);
   const [showLlmModal, setShowLlmModal] = useState(false);
   const [generationStatus, setGenerationStatus] = useState('');
-  /** Count of nodes whose confidence was updated by the LLM pass (cleared on new generation) */
-  const [llmRefinedCount, setLlmRefinedCount] = useState<{ refined: number; total: number } | null>(null);
   const isResizing = useRef(false);
   const workspaceRef = useRef<HTMLDivElement>(null);
   // Store the loaded PDFDocumentProxy so generation can be deferred
@@ -55,7 +53,7 @@ export default function App() {
     fetch('/api/save-toc', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ markdown }),
+      body: JSON.stringify({ markdown, fileName }),
     })
       .then((r) => r.json())
       .then((result) => {
@@ -127,15 +125,13 @@ export default function App() {
       });
       setGenerationStatus('');
       const flat = flattenToc(refinedNodes);
-      const refinedCount = flat.filter((n) => n.refined).length;
-      setLlmRefinedCount({ refined: refinedCount, total: flat.length });
       setState((s) => ({
         ...s,
         tocNodes: refinedNodes,
         auditLog: appendEvent(
           s.auditLog,
           'generated',
-          `LLM verified and refined TOC to ${flat.length} entries (${refinedCount} confidence scores updated) from "${fileName}"`
+          `LLM verified and refined TOC to ${flat.length} entries from "${fileName}"`
         ),
       }));
       saveTocForEval(refinedNodes, fileName);
@@ -154,7 +150,6 @@ export default function App() {
     const fileName = state.pdfFile?.name ?? 'document';
 
     setGenerationStatus('Starting…');
-    setLlmRefinedCount(null);
     setState((s) => ({ ...s, generating: true, tocNodes: [], auditLog: createAuditLog() }));
 
     let heuristicNodes: TocNode[] = [];
@@ -370,7 +365,6 @@ export default function App() {
                 generating={state.generating}
                 llmRefining={llmRefining}
                 generationStatus={generationStatus}
-                llmRefinedCount={llmRefinedCount}
                 onSave={hasToc ? handleSave : undefined}
               />
             </div>

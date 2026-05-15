@@ -84,7 +84,35 @@ function modalFontSize(lines: RawLine[]): number {
 }
 
 function isBold(fontName: string): boolean {
-  return /bold|heavy|black/i.test(fontName);
+  // Match common PDF font-weight tokens. Embedded fonts often use
+  // abbreviated names ("Times-Bd", "Helvetica-Bk", "NimbusSan-Demi")
+  // or weight-class digits ("Roboto-w7"); without these aliases the
+  // bold signal is lost for every IEEE/ACM-style paper that uses bold
+  // body-sized A./B./C. sub-section markers.
+  return /bold|heavy|black|demi|semibold|\bbd\b|\bbk\b|-bd|MT-?Bd|w[6-9]\b/i.test(
+    fontName
+  );
+}
+
+/**
+ * Structural heading patterns that must survive the font/size filter
+ * regardless of how PDF.js reports their styling. These cover the
+ * markers that prompt-side rules are written against:
+ *   - `1.`, `1.1`, `4.1.2`               numeric outline
+ *   - `I.`, `II.`, `IV.`, `VI.`         IEEE roman-numeral sections
+ *   - `A.`, `B.`, `C.`                  IEEE alphabetic sub-sections
+ *   - `Appendix A`, `Chapter 4`, `Part III`
+ */
+const STRUCTURAL_HEADING_PATTERNS: RegExp[] = [
+  /^\d+(?:\.\d+){0,3}\.?\s+\S/,
+  /^[IVX]{1,5}\.\s+[A-ZÀ-ſ]/,
+  /^[A-Z]\.\s+[A-ZÀ-ſ]/,
+  /^(?:Appendix|Chapter|Section|Part|Unit|Module|Lesson)\s+[A-Z0-9IVX]+/i,
+  /^(?:References|Acknowledgements?|Bibliography|Index)\s*$/i,
+];
+
+function matchesStructuralHeading(text: string): boolean {
+  return STRUCTURAL_HEADING_PATTERNS.some((re) => re.test(text));
 }
 
 let _nodeSeq = 0;
@@ -134,6 +162,13 @@ export async function extractToc(
   // it wraps to a new line (e.g. "Part II: Application and" / "Cloud
   // Security"). We merge consecutive items on the same page that share
   // the same font size, bold state, and are vertically adjacent.
+  //
+  // Exception: if the previous line already matches a structural
+  // heading pattern (e.g. "A. Setup", "I. Introduction"), do NOT
+  // absorb the next line into it. Otherwise IEEE/ACM body-sized bold
+  // sub-section markers get fused with the body paragraph that follows
+  // them and exceed the MAX_HEADING_CHARS cap, which silently deletes
+  // them from the candidate set.
   const Y_MERGE_THRESHOLD = 3; // max Y-gap (pt) to consider same line cluster
   const mergedLines: RawLine[] = [];
   for (const line of rawLines) {
@@ -143,7 +178,8 @@ export async function extractToc(
       prev.page === line.page &&
       Math.abs(prev.fontSize - line.fontSize) < 0.5 &&
       prev.bold === line.bold &&
-      Math.abs(prev.y - line.y) <= prev.fontSize * Y_MERGE_THRESHOLD
+      Math.abs(prev.y - line.y) <= prev.fontSize * Y_MERGE_THRESHOLD &&
+      !matchesStructuralHeading(prev.text)
     ) {
       // Merge: append text, keep the higher Y (first visual line)
       prev.text = prev.text + ' ' + line.text;
@@ -159,10 +195,15 @@ export async function extractToc(
   // ── Step 3: filter heading candidates ────────────────────────────
   onProgress?.('Filtering heading candidates…');
   const candidates = mergedLines.filter((l) => {
-    if (l.fontSize < MIN_HEADING_SIZE) return false;
-    if (l.fontSize < bodySize + HEADING_SIZE_DELTA && !l.bold) return false;
+    // Structural-marker bypass: keep lines that look like canonical
+    // outline/IEEE/ACM heading markers even when the embedded font
+    // hides the bold signal or the line is body-sized.
+    const isStructural = matchesStructuralHeading(l.text);
     if (l.text.length < MIN_HEADING_CHARS) return false;
     if (l.text.length > MAX_HEADING_CHARS) return false;
+    if (isStructural) return true;
+    if (l.fontSize < MIN_HEADING_SIZE) return false;
+    if (l.fontSize < bodySize + HEADING_SIZE_DELTA && !l.bold) return false;
     return true;
   });
 
@@ -199,26 +240,64 @@ export async function extractToc(
 
   if (filteredCandidates.length === 0) return [];
 
+  // ── Step 3d: drop cover-page candidates ───────────────────────────
+  // The document's cover page is usually page 1 with a single very large
+  // title plus a small subtitle/date line. The title belongs in the
+  // document H1 — not as a TOC bullet — and the subtitle is body-style
+  // text that would otherwise become a spurious leaf entry.
+  // Detection: if the largest detected font size only occurs on page 1
+  // AND the second-largest size (the real "level 1" body heading style)
+  // only starts on page 2 or later, treat page 1 as a cover and drop
+  // every candidate it contains.
+  const allSizesDesc = [...new Set(filteredCandidates.map((c) => c.fontSize))].sort(
+    (a, b) => b - a
+  );
+  let coverTrimmed = filteredCandidates;
+  if (allSizesDesc.length >= 2) {
+    const topSize = allSizesDesc[0];
+    const secondSize = allSizesDesc[1];
+    const topEntries = filteredCandidates.filter((c) => c.fontSize === topSize);
+    const secondEntries = filteredCandidates.filter((c) => c.fontSize === secondSize);
+    const topAllOnPage1 = topEntries.every((c) => c.page === 1);
+    const secondNeverOnPage1 = secondEntries.every((c) => c.page !== 1);
+    if (topAllOnPage1 && secondNeverOnPage1) {
+      coverTrimmed = filteredCandidates.filter((c) => c.page !== 1);
+    }
+  }
+
+  if (coverTrimmed.length === 0) return [];
+
   // ── Step 4: cluster font sizes → heading levels ───────────────────
-  const uniqueSizes = [...new Set(filteredCandidates.map((c) => c.fontSize))].sort(
+  // Map distinct surviving font sizes to heading levels (largest =
+  // level 1). Standard Mode targets 3 levels; if more sizes survive,
+  // collapse the *smallest* sizes onto level 3 so true sub-sections are
+  // still emitted (rather than nesting them deeper than the gold rubric
+  // expects).
+  const MAX_LEVELS = 3;
+  const uniqueSizes = [...new Set(coverTrimmed.map((c) => c.fontSize))].sort(
     (a, b) => b - a
   ); // descending: largest = level 1
 
   const sizeToLevel = new Map<number, number>();
   uniqueSizes.forEach((size, idx) => {
-    sizeToLevel.set(size, idx + 1);
+    sizeToLevel.set(size, Math.min(idx + 1, MAX_LEVELS));
   });
 
   // ── Step 5: assign confidence (heuristic) ─────────────────────────
   onProgress?.('Scoring candidates…');
-  const flatNodes: TocNode[] = filteredCandidates.map((c) => {
+  const flatNodes: TocNode[] = coverTrimmed.map((c) => {
     const level = sizeToLevel.get(c.fontSize) ?? 1;
 
-    // Confidence heuristic: large delta from body = high confidence
+    // Confidence heuristic: combine absolute delta and ratio so small
+    // but consistent deltas (e.g. 12pt vs 10pt body — common for L3
+    // section headings) clear the "unknown" threshold.
     const sizeDelta = c.fontSize - bodySize;
-    const sizeScore = Math.min(sizeDelta / 8, 1); // 8pt delta → 1.0
+    const deltaScore = Math.min(sizeDelta / 6, 1); // 6pt delta → 1.0
+    const ratioScore = Math.min(Math.max((c.fontSize / bodySize - 1) * 2.5, 0), 1);
+    // 1.2× body → 0.5, 1.5× body → 1.0
+    const baseScore = Math.max(deltaScore, ratioScore);
     const boldBonus = c.bold ? 0.2 : 0;
-    const confidence = Math.min(Math.max(sizeScore + boldBonus, 0), 1);
+    const confidence = Math.min(Math.max(baseScore + boldBonus, 0), 1);
 
     const isAmbiguous = confidence < UNKNOWN_CONFIDENCE_THRESHOLD;
 

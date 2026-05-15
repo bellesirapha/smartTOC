@@ -54,7 +54,17 @@ def normalize_label(label: str, mode: str = "strict") -> str:
     s = re.sub(r"\s+", " ", s).strip().lower()
 
     if mode == "loose":
-        s = re.sub(r"^appendix\s+[a-z]\.?\s+", "", s)
+        # Appendix prefixes: "Appendix A", "Appendix B.", "Appendix 2:"
+        s = re.sub(r"^appendix\s+[a-z0-9]+\s*[:.\-\u2013\u2014]?\s+", "", s)
+        # Structural-word prefixes: Chapter/Section/Part/Unit/Module/Lesson +
+        # arabic, roman, or single-letter id, optional separator.
+        s = re.sub(
+            r"^(?:chapter|section|part|unit|module|lesson)\s+"
+            r"(?:[0-9]+(?:\.[0-9]+)*|[ivxlcdm]+|[a-z])\s*"
+            r"[:.\-\u2013\u2014]?\s+",
+            "",
+            s,
+        )
         s = re.sub(r"^[a-z]\.[0-9]+\s+", "", s)  # A.1
         s = re.sub(r"^[0-9]+(?:\.[0-9]+)*\.?\s+", "", s)  # 2.1.3
 
@@ -236,12 +246,31 @@ def collect_headings(root: Node, mode: str) -> List[Tuple[str, Optional[int]]]:
     return out
 
 
+def collect_headings_with_depth(
+    root: Node, mode: str
+) -> List[Tuple[str, Optional[int], int]]:
+    """Like collect_headings, but also returns the 1-based depth of each entry
+    (top-level bullets are depth 1)."""
+
+    out: List[Tuple[str, Optional[int], int]] = []
+
+    def dfs(n: Node, depth: int) -> None:
+        for ch in n.children:
+            out.append((normalize_label(ch.label, mode), ch.page, depth))
+            dfs(ch, depth + 1)
+
+    dfs(root, 1)
+    return out
+
+
 def evaluate(gold_path: str, pred_path: str, mode: str = "strict", evaluate_pages: bool = False) -> Dict:
     gold = parse_toc_md(gold_path)
     pred = parse_toc_md(pred_path)
 
     gold_list = collect_headings(gold, mode)
     pred_list = collect_headings(pred, mode)
+    gold_with_depth = collect_headings_with_depth(gold, mode)
+    pred_with_depth = collect_headings_with_depth(pred, mode)
 
     gold_set = {h for h, _ in gold_list}
     pred_set = {h for h, _ in pred_list}
@@ -251,26 +280,53 @@ def evaluate(gold_path: str, pred_path: str, mode: str = "strict", evaluate_page
     recall = len(inter) / len(gold_set) if gold_set else 0.0
     f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) else 0.0
 
+    # Depth-stratified recall: groups gold headings by their depth in the gold tree
+    # and reports how many were matched (regardless of pred depth).
+    by_depth: Dict[int, Dict[str, float]] = {}
+    gold_by_depth: Dict[int, set] = {}
+    for label, _, depth in gold_with_depth:
+        gold_by_depth.setdefault(depth, set()).add(label)
+    for depth, labels in sorted(gold_by_depth.items()):
+        matched_at_depth = len(labels & inter)
+        gold_at_depth = len(labels)
+        by_depth[depth] = {
+            "gold": gold_at_depth,
+            "matched": matched_at_depth,
+            "recall": (matched_at_depth / gold_at_depth) if gold_at_depth else 0.0,
+        }
+
     page_metrics = None
     if evaluate_pages:
         gold_pages = {h: p for h, p in gold_list if p is not None}
         pred_pages = {h: p for h, p in pred_list if p is not None}
         matched = [h for h in inter if h in gold_pages and h in pred_pages]
+        gold_with_pages = len(gold_pages)
         if matched:
             exact = sum(1 for h in matched if gold_pages[h] == pred_pages[h])
             maes = [abs(gold_pages[h] - pred_pages[h]) for h in matched]
             page_metrics = {
                 "matched_with_pages": len(matched),
+                "gold_with_pages": gold_with_pages,
+                "page_coverage": (len(matched) / gold_with_pages) if gold_with_pages else 0.0,
                 "page_exact_match_rate": exact / len(matched),
                 "page_mae": sum(maes) / len(maes),
             }
         else:
-            page_metrics = {"matched_with_pages": 0, "page_exact_match_rate": None, "page_mae": None}
+            page_metrics = {
+                "matched_with_pages": 0,
+                "gold_with_pages": gold_with_pages,
+                "page_coverage": 0.0,
+                "page_exact_match_rate": None,
+                "page_mae": None,
+            }
 
     dist, n_pred, n_gold = tree_edit_distance(pred, gold, mode=mode)
-    denom = max(n_pred, n_gold)
+    # Use the additive upper bound (delete-all + insert-all) so the normalized
+    # value is always in [0, 1]; max(n_pred, n_gold) can be exceeded when trees
+    # differ a lot in shape and produces a meaningless negative similarity.
+    denom = n_pred + n_gold
     norm = dist / denom if denom else 0.0
-    similarity = 1.0 - norm
+    similarity = max(0.0, 1.0 - norm)
 
     hallucinated = sorted(pred_set - gold_set)
     omitted = sorted(gold_set - pred_set)
@@ -293,6 +349,7 @@ def evaluate(gold_path: str, pred_path: str, mode: str = "strict", evaluate_page
             "normalized_ted": norm,
             "tree_similarity": similarity,
         },
+        "by_depth": by_depth,
         "errors": {
             "hallucinated_count": len(hallucinated),
             "omitted_count": len(omitted),
@@ -316,7 +373,10 @@ def _print_human(res: Dict, show_pages: bool) -> None:
         if not p:
             print("(no page metrics)")
         else:
-            print(f"Matched w/ pages: {p['matched_with_pages']}")
+            print(f"Matched w/ pages: {p['matched_with_pages']} / Gold w/ pages: {p.get('gold_with_pages', 'n/a')}")
+            cov = p.get("page_coverage")
+            if cov is not None:
+                print(f"PageCoverage: {cov:.3f}")
             if p["page_exact_match_rate"] is None:
                 print("PageExact@Match: n/a")
                 print("PageMAE: n/a")
@@ -328,6 +388,16 @@ def _print_human(res: Dict, show_pages: bool) -> None:
     print("\n== Hierarchy (TED) ==")
     print(f"TED: {hi['tree_edit_distance']} | Nodes pred: {hi['nodes_pred']} | Nodes gold: {hi['nodes_gold']}")
     print(f"Normalized TED: {hi['normalized_ted']:.3f} | TreeSimilarity: {hi['tree_similarity']:.3f}")
+
+    bd = res.get("by_depth") or {}
+    if bd:
+        print("\n== Recall by Gold Depth ==")
+        for depth in sorted(bd.keys(), key=lambda d: int(d)):
+            row = bd[depth]
+            print(
+                f"L{depth}: {row['matched']}/{row['gold']} "
+                f"(recall {row['recall']:.3f})"
+            )
 
     e = res["errors"]
     print("\n== Errors (samples) ==")

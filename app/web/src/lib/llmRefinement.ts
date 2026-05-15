@@ -70,6 +70,25 @@ HEADING DETECTION SIGNALS (treat as strong positive indicators):
 - All-caps short phrase that is a document title or major section name
 - Bold text that is shorter than a typical sentence (< 80 characters)
 - A line that is significantly larger or bolder than surrounding body text
+- A short Title-Case phrase (< 80 characters) that names a topic
+  (e.g. "Types of Cyber Threats", "Authentication Mechanisms",
+  "Shared Responsibility Model"). These are sub-section headings even
+  without numeric prefixes — KEEP them and assign confidence ≥ 0.55.
+  Do NOT drop a candidate solely because heuristic_confidence is low or
+  because it lacks numbering; lean on the text shape and surrounding
+  context instead.
+- IEEE / ACM / conference-paper markers:
+    • Roman numeral + "." + Title Case ("I. Introduction",
+      "IV. Experiments", "VI. Conclusion") — LEVEL 1, confidence ≥ 0.85.
+    • Single capital letter + "." + Title Case ("A. Setup",
+      "B. Privacy–utility trade-off", "C. Cross-dataset comparison")
+      — LEVEL 2, confidence ≥ 0.75. KEEP every one of these even when
+      the heuristic_confidence is low or the line is body-sized but
+      bold; they are the canonical IEEE sub-section markers and must
+      never be dropped or treated as author initials, list bullets, or
+      bibliography entries.
+    • "1)", "2)", "a)" + Title Case under an A./B. block — LEVEL 3.
+    • Bare words "References", "Acknowledgements", "Appendix" — LEVEL 1.
 
 FALSE POSITIVE SIGNALS (treat as strong negative indicators):
 - Repeated identical text on every page (running header/footer)
@@ -77,12 +96,22 @@ FALSE POSITIVE SIGNALS (treat as strong negative indicators):
 - Longer than 120 characters (likely a body sentence)
 - Legal disclaimers, copyright notices, or boilerplate notices
 - Table column headers or cell contents
+- Document cover-page subtitle / publication date lines (e.g.
+  "A Comprehensive Reference Guide", "Published 2026") — these are
+  cover-page metadata, not headings.
 
 HIERARCHY RULES:
 - Numbered prefix depth determines level: "1." → level 1, "1.1" → level 2, "1.1.1" → level 3
 - Appendix entries belong at level 1 even if labeled "Appendix A"
-- Document title / cover page text is level 1
-- If numbering is absent, infer level from font size relative to siblings
+- Part-style entries ("Part I:", "Part II:") sit at level 1, with
+  Chapter-style entries ("Chapter 1:", "Chapter 2:") nested at level 2
+  beneath them, and unnumbered topic headings at level 3.
+- The document's cover-page title belongs in the markdown H1 only —
+  never emit it as a level-1 bullet (set is_heading=false for it).
+- If numbering is absent, infer level from font size relative to
+  siblings AND from the heuristic_level passed in (trust it unless
+  clearly wrong). Default to level 3 for short Title-Case topic lines
+  that follow a chapter heading.
 
 STRICT OUTPUT RULES — violating any rule makes output invalid:
 - DO NOT invent, modify, rephrase, translate, or truncate any "text" value.

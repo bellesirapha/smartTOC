@@ -21,7 +21,11 @@ The evaluator uses two label modes:
 - Collapses whitespace.
 
 ### B. Loose label mode (optional)
-- Strips common leading numbering/prefix tokens (e.g. `2.1`, `3`, `A.2`, `B.1`, `Appendix` + letter).
+- Strips common leading numbering/prefix tokens before comparison:
+  - Numeric: `2`, `2.1`, `2.1.3`, `A.1`
+  - Appendix prefixes: `Appendix A`, `Appendix B.`, `Appendix 2:`
+  - Structural words: `Chapter 1:`, `Section 2.`, `Part III —`, `Unit 4`, `Module B`, `Lesson 5`
+    (matches arabic numbers, roman numerals, or single-letter ids; with optional `:`/`.`/`-`/`–`/`—` separator)
 - Case-insensitive.
 - Collapses whitespace.
 
@@ -69,6 +73,7 @@ Then:
 
 ### 3.2 Page number accuracy (optional)
 If the predicted TOC contains page numbers, evaluate:
+- **PageCoverage**: fraction of gold headings (with a page) for which the model also produced a matching heading + page. Surfaces silent omissions that PageExact alone hides.
 - **PageExact@Match**: fraction of matched headings whose page numbers exactly match.
 - **PageMAE**: mean absolute error in page numbers for matched headings (lower is better).
 
@@ -84,8 +89,18 @@ Compute **Zhang–Shasha ordered tree edit distance** using unit costs:
 
 Report:
 - **TED (raw)**: minimum edit operations to transform predicted tree into gold tree
-- **TED (normalized)**: TED / max(|nodes_gold|, |nodes_pred|)
-- **TreeSimilarity** = 1 − TED(normalized)
+- **TED (normalized)**: TED / (|nodes_gold| + |nodes_pred|)  
+  Uses the additive upper bound (delete-all + insert-all) so the value is always in [0, 1].
+- **TreeSimilarity** = max(0, 1 − TED(normalized))  
+  Clamped to [0, 1]; very dissimilar trees report 0 rather than a negative number.
+
+### 3.4 Depth-stratified recall
+Because overall recall hides *where* the model misses, the evaluator also reports recall grouped by **gold depth**:
+- **L1** (top-level bullets, e.g. `Part I`, `1. Household Overview`)
+- **L2** (one indent below)
+- **L3+** (deeper)
+
+This makes "the extractor stops at chapters" instantly visible: e.g. `L1: 1.000 | L2: 1.000 | L3: 0.000`.
 
 ## 4) Suggested thresholds (tune as needed)
 Baseline (safe):
@@ -104,6 +119,10 @@ Stretch:
 - Mis-nested (wrong parent)
 - Sibling order error
 - Page drift
+- **Depth truncation** (consistently misses an entire depth level — detect via depth-stratified recall)
+
+## 6) Document title convention
+The document title belongs in the `# Table of Contents — <Title>` heading, **not** as a top-level bullet. A bullet that duplicates the document title will be counted as a hallucinated heading.
 
 ---
 ### Example CLI

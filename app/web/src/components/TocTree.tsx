@@ -49,8 +49,6 @@ interface Props {
   generationStatus?: string;
   /** Save callback — shown in footer when TOC exists */
   onSave?: () => void;
-  /** When set, shows how many nodes had confidence updated by LLM */
-  llmRefinedCount?: { refined: number; total: number } | null;
 }
 
 // Re-export for convenience
@@ -90,7 +88,6 @@ export const TocTree: React.FC<Props> = ({
   llmRefining,
   generationStatus,
   onSave,
-  llmRefinedCount,
 }) => {
   const sensors = useSensors(useSensor(PointerSensor));
 
@@ -149,15 +146,6 @@ export const TocTree: React.FC<Props> = ({
         </div>
       )}
 
-      {!llmRefining && llmRefinedCount && (
-        <div className="toc-tree__llm-verified">
-          ✦ LLM verified {llmRefinedCount.total} headings
-          {llmRefinedCount.refined > 0 && (
-            <> — <strong>{llmRefinedCount.refined}</strong> confidence scores updated</>
-          )}
-          {llmRefinedCount.refined === 0 && <> — all scores match heuristic</>}
-        </div>
-      )}
 
       {!generating && nodes.length === 0 && (
         <div className="toc-tree__empty">
@@ -180,10 +168,10 @@ export const TocTree: React.FC<Props> = ({
             <ul className="toc-tree__list">
               {nodes.map((node, idx) => (
                 <React.Fragment key={node.id}>
-                  {/* Inline divider before number the first uncategorized node */}
+                  {/* Inline divider before the first unmapped node */}
                   {uncatIdx >= 0 && idx === uncatIdx && (
                     <li className="toc-tree__uncategorized-divider">
-                      Uncategorized ({uncatCount})
+                      Unmapped ({uncatCount})
                     </li>
                   )}
                   <SortableTocItem

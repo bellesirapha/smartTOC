@@ -201,30 +201,8 @@ export default function App() {
     e.target.value = '';
   }, [handleFileSelected]);
 
-  const handleNodesChange = useCallback((nodes: TocNode[]) => {
-    setState((s) => ({
-      ...s, tocNodes: nodes,
-      auditLog: appendEvent(s.auditLog, 'moved', 'TOC entry reordered via drag-and-drop'),
-    }));
-  }, []);
-
   const handleNodeClick = useCallback((node: TocNode) => {
     setState((s) => ({ ...s, activePage: node.page }));
-  }, []);
-
-  const handleNodeEdited = useCallback((nodeId: string, newLabel: string) => {
-    setState((s) => {
-      const node = findNode(s.tocNodes, nodeId);
-      return {
-        ...s,
-        tocNodes: editNodeLabel(s.tocNodes, nodeId, newLabel),
-        auditLog: appendEvent(
-          s.auditLog, 'edited_label',
-          `Label changed from "${node?.label ?? '?'}" to "${newLabel}"`,
-          { nodeId, nodeLabel: newLabel }
-        ),
-      };
-    });
   }, []);
 
   const handleNodeDeleted = useCallback((nodeId: string) => {
@@ -322,6 +300,45 @@ export default function App() {
     alert('TOC saved. (PDF bookmark embedding requires a server-side component — audit log updated.)');
   }, []);
 
+  /** Save-as-copy → download the TOC as a Markdown file via the browser. */
+  const handleSaveAsCopy = useCallback(() => {
+    setState((s) => {
+      if (s.tocNodes.length === 0) return s;
+      const baseName = (s.pdfFile?.name ?? 'document').replace(/\.pdf$/i, '');
+      const markdown = tocNodesToMarkdown(s.tocNodes, baseName);
+      const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${baseName}-toc.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      return {
+        ...s,
+        auditLog: appendEvent(
+          s.auditLog,
+          'saved',
+          `TOC exported as copy → ${baseName}-toc.md`
+        ),
+      };
+    });
+  }, []);
+
+  /** Cancel → discard the generated TOC and return to the pre-generate state. */
+  const handleCancel = useCallback(() => {
+    pendingHeuristicNodesRef.current = null;
+    setLlmRefining(false);
+    setGenerationStatus('');
+    setState((s) => ({
+      ...s,
+      tocNodes: [],
+      generating: false,
+      auditLog: createAuditLog(),
+    }));
+  }, []);
+
   const hasToc = state.tocNodes.length > 0 || state.generating;
   const pdfReady = !!state.pdfUrl && !state.generating;
 
@@ -353,12 +370,10 @@ export default function App() {
             <div className="app__pane app__pane--toc" style={{ width: tocWidth }}>
               <TocTree
                 nodes={state.tocNodes}
-                onNodesChange={handleNodesChange}
                 onGenerateToc={handleGenerateToc}
                 pdfReady={pdfReady}
                 onNodeClick={handleNodeClick}
                 onAuditTrailOpen={handleAuditTrailOpen}
-                onNodeEdited={handleNodeEdited}
                 onNodeDeleted={handleNodeDeleted}
                 onNodeConfirmed={handleNodeConfirmed}
                 onNodeInsertBelow={handleNodeInsertBelow}
@@ -366,6 +381,8 @@ export default function App() {
                 llmRefining={llmRefining}
                 generationStatus={generationStatus}
                 onSave={hasToc ? handleSave : undefined}
+                onSaveAsCopy={hasToc ? handleSaveAsCopy : undefined}
+                onCancel={hasToc ? handleCancel : undefined}
               />
             </div>
             <div
@@ -401,12 +418,6 @@ function confirmNodeStatus(nodes: TocNode[], id: string): TocNode[] {
     n.id === id
       ? { ...n, status: 'user_confirmed' as const, confidence: 1.0 }
       : { ...n, children: confirmNodeStatus(n.children, id) }
-  );
-}
-
-function editNodeLabel(nodes: TocNode[], id: string, label: string): TocNode[] {
-  return nodes.map((n) =>
-    n.id === id ? { ...n, label } : { ...n, children: editNodeLabel(n.children, id, label) }
   );
 }
 

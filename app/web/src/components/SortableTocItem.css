@@ -25,6 +25,24 @@
   background: rgba(243, 139, 108, 0.16);
 }
 
+.toc-item--omitted > .toc-item__row {
+  background: rgba(108, 112, 134, 0.10);
+}
+
+.toc-item--omitted > .toc-item__row:hover {
+  background: rgba(137, 180, 250, 0.16);
+}
+
+.toc-item--omitted .toc-item__label {
+  color: #9399b2;
+  font-style: italic;
+  cursor: pointer;
+}
+
+.toc-item--omitted .toc-item__label:hover {
+  color: #89b4fa;
+}
+
 .toc-item__drag-handle {
   cursor: grab;
   color: #45475a;
@@ -88,6 +106,33 @@
 
 .toc-item__unknown-badge--btn:hover {
   background: #fab387;
+  transform: scale(1.2);
+}
+
+.toc-item__omitted-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  background: #6c7086;
+  color: #1e1e2e;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.toc-item__omitted-badge--btn {
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.toc-item__omitted-badge--btn:hover {
+  background: #a6e3a1;
   transform: scale(1.2);
 }
 

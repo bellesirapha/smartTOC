@@ -39,9 +39,12 @@ function renderNode(node: TocNode, depth: number): string {
  * @returns Markdown string
  */
 export function tocNodesToMarkdown(nodes: TocNode[], docTitle: string): string {
-  if (nodes.length === 0) return '';
+  // Omitted nodes are AI-rejected candidates surfaced in the UI for user
+  // review only — they must NOT appear in the persisted/eval markdown.
+  const persisted = nodes.filter((n) => n.status !== 'omitted');
+  if (persisted.length === 0) return '';
 
   const header = `# Table of Contents — ${docTitle}`;
-  const body = nodes.map((n) => renderNode(n, 0)).join('\n\n');
+  const body = persisted.map((n) => renderNode(n, 0)).join('\n\n');
   return `${header}\n\n${body}\n`;
 }

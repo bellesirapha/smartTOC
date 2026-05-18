@@ -2,7 +2,14 @@
 // Core domain types — governed by CONSTITUTION.md
 // ────────────────────────────────────────────────────────────────
 
-export type TocNodeStatus = 'confirmed' | 'unknown' | 'user_confirmed';
+export type TocNodeStatus =
+  | 'confirmed'
+  | 'unknown'
+  | 'user_confirmed'
+  /** LLM verification pass rejected this candidate as a heading.
+   *  Surfaced under the "Uncategorized" section so the user can
+   *  recover it manually instead of silently losing it. */
+  | 'omitted';
 
 export interface TocNode {
   /** Unique stable ID for this node */

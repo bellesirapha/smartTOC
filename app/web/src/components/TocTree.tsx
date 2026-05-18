@@ -1,39 +1,26 @@
 /**
  * TocTree — left pane
  *
- * Renders the hierarchical TOC with:
- *   - Drag-and-drop reorder/re-nest (@dnd-kit)
- *   - Inline label editing
- *   - Add / delete nodes
- *   - "Unknown" visual indicator
- *   - Confidence badge
+ * Renders the hierarchical TOC as a view-mostly list:
+ *   - Click to navigate the PDF
+ *   - Confirm Unknown / Uncategorized entries
+ *   - Insert / delete entries
+ *   - "Unknown" and "Uncategorized" section dividers
  *   - "View Audit Trail" button
+ *
+ * Drag-and-drop reordering and inline label editing have been removed
+ * intentionally — TOC entries are no longer editable in place.
  */
 
 import React from 'react';
-import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-  arrayMove,
-} from '@dnd-kit/sortable';
 import type { TocNode as TocNodeType } from '../types';
 import { SortableTocItem } from './SortableTocItem';
 import './TocTree.css';
 
 interface Props {
   nodes: TocNode[];
-  onNodesChange: (nodes: TocNode[]) => void;
   onNodeClick: (node: TocNodeType) => void;
   onAuditTrailOpen: () => void;
-  onNodeEdited: (nodeId: string, newLabel: string) => void;
   onNodeDeleted: (nodeId: string) => void;
   onNodeConfirmed: (nodeId: string) => void;
   /** Insert a new node below the given nodeId */
@@ -49,36 +36,28 @@ interface Props {
   generationStatus?: string;
   /** Save callback — shown in footer when TOC exists */
   onSave?: () => void;
+  /** Save-as-copy callback — exposed via the Save split-button dropdown */
+  onSaveAsCopy?: () => void;
+  /** Discard the generated TOC and return to the pre-generate state */
+  onCancel?: () => void;
 }
 
 // Re-export for convenience
 export type TocNode = TocNodeType;
 
-/** Recursively replace the children of the node with the given id */
-function updateNodeChildren(
+/** Find the index where the first node of a given status appears
+ *  (or -1 if none). Used to position inline section dividers. */
+function firstIndexOfStatus(
   nodes: TocNodeType[],
-  parentId: string,
-  newChildren: TocNodeType[]
-): TocNodeType[] {
-  return nodes.map((n) => {
-    if (n.id === parentId) return { ...n, children: newChildren };
-    return { ...n, children: updateNodeChildren(n.children, parentId, newChildren) };
-  });
-}
-
-/** Sort top-level nodes: mapped first, then unknown — returns the index
- *  where the uncategorized section starts (or -1 if none). */
-function uncategorizedStartIndex(nodes: TocNodeType[]): number {
-  const idx = nodes.findIndex((n) => n.status === 'unknown');
-  return idx;
+  status: TocNodeType['status']
+): number {
+  return nodes.findIndex((n) => n.status === status);
 }
 
 export const TocTree: React.FC<Props> = ({
   nodes,
-  onNodesChange,
   onNodeClick,
   onAuditTrailOpen,
-  onNodeEdited,
   onNodeDeleted,
   onNodeConfirmed,
   onNodeInsertBelow,
@@ -88,27 +67,35 @@ export const TocTree: React.FC<Props> = ({
   llmRefining,
   generationStatus,
   onSave,
+  onSaveAsCopy,
+  onCancel,
 }) => {
-  const sensors = useSensors(useSensor(PointerSensor));
+  const unmappedIdx = firstIndexOfStatus(nodes, 'unknown');
+  const unmappedCount = nodes.filter((n) => n.status === 'unknown').length;
+  const omittedIdx = firstIndexOfStatus(nodes, 'omitted');
+  const omittedCount = nodes.filter((n) => n.status === 'omitted').length;
 
-  const topLevelIds = nodes.map((n) => n.id);
-  const uncatIdx = uncategorizedStartIndex(nodes);
-  const uncatCount = uncatIdx >= 0 ? nodes.filter((n) => n.status === 'unknown').length : 0;
+  // Save split-button dropdown
+  const [saveMenuOpen, setSaveMenuOpen] = React.useState(false);
+  const saveMenuRef = React.useRef<HTMLDivElement>(null);
 
-  function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    const oldIndex = nodes.findIndex((n) => n.id === active.id);
-    const newIndex = nodes.findIndex((n) => n.id === over.id);
-    if (oldIndex === -1 || newIndex === -1) return;
-
-    onNodesChange(arrayMove(nodes, oldIndex, newIndex));
-  }
-
-  function handleChildrenChange(parentId: string, newChildren: TocNodeType[]) {
-    onNodesChange(updateNodeChildren(nodes, parentId, newChildren));
-  }
+  React.useEffect(() => {
+    if (!saveMenuOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (!saveMenuRef.current?.contains(e.target as Node)) {
+        setSaveMenuOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSaveMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [saveMenuOpen]);
 
   return (
     <div className="toc-tree">
@@ -156,47 +143,84 @@ export const TocTree: React.FC<Props> = ({
       )}
 
       {nodes.length > 0 && (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext
-            items={topLevelIds}
-            strategy={verticalListSortingStrategy}
-          >
-            <ul className="toc-tree__list">
-              {nodes.map((node, idx) => (
-                <React.Fragment key={node.id}>
-                  {/* Inline divider before the first unmapped node */}
-                  {uncatIdx >= 0 && idx === uncatIdx && (
-                    <li className="toc-tree__uncategorized-divider">
-                      Unmapped ({uncatCount})
-                    </li>
-                  )}
-                  <SortableTocItem
-                    node={node}
-                    depth={0}
-                    onClick={onNodeClick}
-                    onEdit={onNodeEdited}
-                    onDelete={onNodeDeleted}
-                    onConfirm={onNodeConfirmed}
-                    onInsertBelow={onNodeInsertBelow}
-                    onChildrenChange={handleChildrenChange}
-                  />
-                </React.Fragment>
-              ))}
-            </ul>
-          </SortableContext>
-        </DndContext>
+        <ul className="toc-tree__list">
+          {nodes.map((node, idx) => (
+            <React.Fragment key={node.id}>
+              {/* Inline divider before the first unmapped node */}
+              {unmappedIdx >= 0 && idx === unmappedIdx && (
+                <li className="toc-tree__uncategorized-divider">
+                  Unmapped ({unmappedCount})
+                </li>
+              )}
+              {/* Inline divider before the first omitted node */}
+              {omittedIdx >= 0 && idx === omittedIdx && (
+                <li className="toc-tree__omitted-divider">
+                  Uncategorized ({omittedCount})
+                  <span className="toc-tree__omitted-hint">
+                    AI excluded — click an entry to jump to its page,
+                    or ⊘ to keep it as a heading
+                  </span>
+                </li>
+              )}
+              <SortableTocItem
+                node={node}
+                depth={0}
+                onClick={onNodeClick}
+                onDelete={onNodeDeleted}
+                onConfirm={onNodeConfirmed}
+                onInsertBelow={onNodeInsertBelow}
+              />
+            </React.Fragment>
+          ))}
+        </ul>
       )}
 
       {nodes.length > 0 && (
         <div className="toc-tree__footer">
           <div className="toc-tree__footer-actions">
             {onSave && (
-              <button className="toc-tree__save-btn" onClick={onSave}>
-                💾 Save
+              <div className="toc-tree__save-split" ref={saveMenuRef}>
+                <button
+                  className="toc-tree__save-btn toc-tree__save-btn--primary"
+                  onClick={() => { setSaveMenuOpen(false); onSave(); }}
+                  title="Save TOC"
+                >
+                  💾 Save
+                </button>
+                <button
+                  className="toc-tree__save-btn toc-tree__save-caret"
+                  onClick={() => setSaveMenuOpen((o) => !o)}
+                  aria-haspopup="menu"
+                  aria-expanded={saveMenuOpen}
+                  aria-label="More save options"
+                  title="More save options"
+                >
+                  ▾
+                </button>
+                {saveMenuOpen && (
+                  <div className="toc-tree__save-menu" role="menu">
+                    <button
+                      className="toc-tree__save-menu-item"
+                      role="menuitem"
+                      onClick={() => {
+                        setSaveMenuOpen(false);
+                        onSaveAsCopy?.();
+                      }}
+                      disabled={!onSaveAsCopy}
+                    >
+                      Save as copy…
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            {onCancel && (
+              <button
+                className="toc-tree__cancel-btn"
+                onClick={onCancel}
+                title="Discard the generated TOC and start over"
+              >
+                ✕ Cancel
               </button>
             )}
           </div>

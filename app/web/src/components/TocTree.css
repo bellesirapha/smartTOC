@@ -120,6 +120,33 @@
   user-select: none;
 }
 
+/* ── Omitted / "Uncategorized" inline divider ──────────── */
+
+.toc-tree__omitted-divider {
+  list-style: none;
+  padding: 8px 16px 6px;
+  margin-top: 6px;
+  border-top: 1px dashed #45475a;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #9399b2;
+  user-select: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toc-tree__omitted-hint {
+  font-size: 10px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: #6c7086;
+  font-style: italic;
+}
+
 /* ── Footer (Save + AI disclosure) ─────────────────────── */
 
 .toc-tree__footer {
@@ -151,6 +178,84 @@
 
 .toc-tree__save-btn:hover {
   background: #585b70;
+}
+
+/* ── Save split-button (Save + caret dropdown) ─────────── */
+
+.toc-tree__save-split {
+  flex: 1;
+  display: flex;
+  position: relative;
+}
+
+.toc-tree__save-btn--primary {
+  flex: 1;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: none;
+}
+
+.toc-tree__save-caret {
+  flex: 0 0 26px;
+  padding: 7px 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.toc-tree__save-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  right: 0;
+  min-width: 160px;
+  background: #313244;
+  border: 1px solid #585b70;
+  border-radius: 5px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  padding: 4px;
+  z-index: 20;
+}
+
+.toc-tree__save-menu-item {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  background: none;
+  border: none;
+  color: #cdd6f4;
+  text-align: left;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.toc-tree__save-menu-item:hover:not(:disabled) {
+  background: #45475a;
+}
+
+.toc-tree__save-menu-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Cancel button ─────────────────────────────────────── */
+
+.toc-tree__cancel-btn {
+  flex: 0 0 auto;
+  padding: 7px 12px;
+  background: transparent;
+  color: #f38ba8;
+  border: 1px solid #45475a;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.toc-tree__cancel-btn:hover {
+  background: rgba(243, 139, 168, 0.12);
+  border-color: #f38ba8;
 }
 
 .toc-tree__ai-note {

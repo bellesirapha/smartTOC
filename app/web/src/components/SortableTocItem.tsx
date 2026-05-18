@@ -1,19 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-  arrayMove,
-  useSortable,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import React, { useState } from 'react';
 import type { TocNode } from '../types';
 import './SortableTocItem.css';
 
@@ -21,93 +6,47 @@ interface Props {
   node: TocNode;
   depth: number;
   onClick: (node: TocNode) => void;
-  onEdit: (nodeId: string, newLabel: string) => void;
   onDelete: (nodeId: string) => void;
-  /** Confirm an Unknown node's accuracy — flips status to user_confirmed */
+  /** Confirm an Unknown/Omitted node — flips status to user_confirmed */
   onConfirm?: (nodeId: string) => void;
   /** Insert a new node below this one */
   onInsertBelow?: (nodeId: string) => void;
-  /** Called when a direct child of this node is reordered */
-  onChildrenChange?: (parentId: string, newChildren: TocNode[]) => void;
 }
 
+/**
+ * TocItem — a single TOC entry row.
+ *
+ * View-mostly: drag-and-drop reordering and inline label editing have
+ * been removed. Users can still click an entry to navigate the PDF,
+ * collapse/expand subtrees, confirm Unknown/Omitted entries, insert a
+ * sibling below, or delete an entry.
+ *
+ * (Component name retained to avoid churn across imports.)
+ */
 export const SortableTocItem: React.FC<Props> = ({
   node,
   depth,
   onClick,
-  onEdit,
   onDelete,
   onConfirm,
   onInsertBelow,
-  onChildrenChange,
 }) => {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(node.label);
   const [collapsed, setCollapsed] = useState(false);
 
-  // Keep draft in sync when node label is updated externally (e.g. after LLM pass)
-  useEffect(() => {
-    if (!editing) setDraft(node.label);
-  }, [node.label, editing]);
-
-  const sensors = useSensors(useSensor(PointerSensor));
-
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: node.id });
-
   const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
     paddingLeft: `${16 + depth * 20}px`,
   };
 
-  function commitEdit() {
-    const trimmed = draft.trim();
-    if (trimmed && trimmed !== node.label) {
-      onEdit(node.id, trimmed);
-    }
-    setEditing(false);
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Enter') commitEdit();
-    if (e.key === 'Escape') {
-      setDraft(node.label);
-      setEditing(false);
-    }
-  }
-
-  function handleChildDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const oldIdx = node.children.findIndex((c) => c.id === active.id);
-    const newIdx = node.children.findIndex((c) => c.id === over.id);
-    if (oldIdx === -1 || newIdx === -1) return;
-    const reordered = arrayMove(node.children, oldIdx, newIdx);
-    onChildrenChange?.(node.id, reordered);
-  }
-
   const isUnknown = node.status === 'unknown';
+  const isOmitted = node.status === 'omitted';
   const isUserConfirmed = node.status === 'user_confirmed';
 
   return (
     <li
-      ref={setNodeRef}
       style={style}
-      className={`toc-item ${isUnknown ? 'toc-item--unknown' : ''} ${node.manual ? 'toc-item--manual' : ''}`}
+      className={`toc-item ${isUnknown ? 'toc-item--unknown' : ''} ${isOmitted ? 'toc-item--omitted' : ''} ${node.manual ? 'toc-item--manual' : ''}`}
     >
       <div className="toc-item__row">
-        {/* Drag handle */}
-        <span
-          className="toc-item__drag-handle"
-          {...attributes}
-          {...listeners}
-          title="Drag to reorder"
-        >
-          ⠿
-        </span>
-
         {/* Collapse toggle (if has children) */}
         {node.children.length > 0 && (
           <button
@@ -119,41 +58,36 @@ export const SortableTocItem: React.FC<Props> = ({
           </button>
         )}
 
-        {/* Label / edit input */}
-        {editing ? (
-          <input
-            className="toc-item__edit-input"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={commitEdit}
-            onKeyDown={handleKeyDown}
-            autoFocus
-          />
-        ) : (
-          <span
-            className="toc-item__label"
-            onClick={() => onClick(node)}
-            onDoubleClick={(e) => { e.stopPropagation(); setDraft(node.label); setEditing(true); }}
-            title={`Double-click to edit · Page ${node.page}`}
-          >
-            {isUnknown && (
-              <button
-                className="toc-item__unknown-badge toc-item__unknown-badge--btn"
-                title="Click to confirm accuracy"
-                onClick={(e) => { e.stopPropagation(); onConfirm?.(node.id); }}
-              >?</button>
-            )}
-            {isUserConfirmed && (
-              <span className="toc-item__userconfirmed-badge" title="Confirmed by user">✓</span>
-            )}
-            {node.label}
-            {node.manual && (
-              <span className="toc-item__manual-badge" title="Manually added">
-                ✏
-              </span>
-            )}
-          </span>
-        )}
+        {/* Label — click navigates the PDF to this entry's page */}
+        <span
+          className="toc-item__label"
+          onClick={() => onClick(node)}
+          title={`Jump to page ${node.page}`}
+        >
+          {isUnknown && (
+            <button
+              className="toc-item__unknown-badge toc-item__unknown-badge--btn"
+              title="Click to confirm accuracy"
+              onClick={(e) => { e.stopPropagation(); onConfirm?.(node.id); }}
+            >?</button>
+          )}
+          {isOmitted && (
+            <button
+              className="toc-item__omitted-badge toc-item__omitted-badge--btn"
+              title="Excluded by AI — click to keep as a heading"
+              onClick={(e) => { e.stopPropagation(); onConfirm?.(node.id); }}
+            >⊘</button>
+          )}
+          {isUserConfirmed && (
+            <span className="toc-item__userconfirmed-badge" title="Confirmed by user">✓</span>
+          )}
+          {node.label}
+          {node.manual && (
+            <span className="toc-item__manual-badge" title="Manually added">
+              ✏
+            </span>
+          )}
+        </span>
 
         {/* Page number */}
         <span className="toc-item__page">p.{node.page}</span>
@@ -177,37 +111,22 @@ export const SortableTocItem: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Children — each subtree gets its own DndContext */}
+      {/* Children */}
       {node.children.length > 0 && !collapsed && (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleChildDragEnd}
-        >
-          <SortableContext
-            items={node.children.map((c) => c.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <ul className="toc-item__children">
-              {node.children.map((child) => (
-                <SortableTocItem
-                  key={child.id}
-                  node={child}
-                  depth={depth + 1}
-                  onClick={onClick}
-                  onEdit={onEdit}
-                  onDelete={onDelete}
-                  onConfirm={onConfirm}
-                  onInsertBelow={onInsertBelow}
-                  onChildrenChange={onChildrenChange}
-                />
-              ))}
-            </ul>
-          </SortableContext>
-        </DndContext>
+        <ul className="toc-item__children">
+          {node.children.map((child) => (
+            <SortableTocItem
+              key={child.id}
+              node={child}
+              depth={depth + 1}
+              onClick={onClick}
+              onDelete={onDelete}
+              onConfirm={onConfirm}
+              onInsertBelow={onInsertBelow}
+            />
+          ))}
+        </ul>
       )}
     </li>
   );
 };
-
-

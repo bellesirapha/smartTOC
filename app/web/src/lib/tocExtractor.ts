@@ -333,13 +333,26 @@ export async function extractToc(
         (done, total) => onProgress?.(`LLM refinement: ${done}/${total} candidates…`)
       );
 
-      // Merge: update confidence/level from LLM; drop non-headings
+      // Merge: update confidence/level from LLM; non-headings become
+      // "omitted" so the UI can surface them under an Uncategorized
+      // section instead of silently losing them.
+      const omittedNodes: TocNode[] = [];
       const mergedNodes = flatNodes
         .map((n) => {
           const key = `${n.page}::${n.label}`;
           const r = refinements.get(key);
           if (!r) return n; // LLM didn't return this entry → keep heuristic
-          if (!r.isHeading) return null; // LLM says not a heading → drop
+          if (!r.isHeading) {
+            omittedNodes.push({
+              ...n,
+              level: 1,
+              children: [],
+              status: 'omitted',
+              confidence: r.confidence,
+              refined: true,
+            });
+            return null;
+          }
           // Rescore: LLM-confirmed headings get a minimum confidence floor so
           // verified entries don't remain in the "low" band.
           // Numeric-prefixed headings (e.g. "1.1 Key Contacts") get ≥ 80%;
@@ -359,7 +372,7 @@ export async function extractToc(
         })
         .filter((n): n is TocNode => n !== null);
 
-      return buildHierarchy(mergedNodes);
+      return [...buildHierarchy(mergedNodes), ...omittedNodes];
     } catch (err) {
       // LLM pass failed entirely — fall back to heuristic result
       console.warn('[extractToc] LLM pass failed, using heuristic result:', err);
@@ -456,12 +469,25 @@ export async function refineTocNodesWithLlm(
     (done, total) => onProgress?.(`LLM verification: ${done}/${total} candidates…`)
   );
 
+  // LLM-rejected candidates are not dropped — they're retained as
+  // "omitted" so the UI can show them under an Uncategorized section.
+  const omittedFlat: TocNode[] = [];
   const mergedFlat = flat
     .map((n) => {
       const key = `${n.page}::${n.label}`;
       const r = refinements.get(key);
       if (!r) return { ...n, children: [] as TocNode[] }; // keep heuristic, clear stale children
-      if (!r.isHeading) return null;          // LLM says not a heading → drop
+      if (!r.isHeading) {
+        omittedFlat.push({
+          ...n,
+          children: [] as TocNode[],
+          level: 1,
+          status: 'omitted',
+          confidence: r.confidence,
+          refined: true,
+        });
+        return null;
+      }
       return {
         ...n,
         children: [] as TocNode[],             // always clear — buildHierarchy re-nests
@@ -475,7 +501,7 @@ export async function refineTocNodesWithLlm(
     })
     .filter((n): n is TocNode => n !== null);
 
-  return buildHierarchy(mergedFlat);
+  return [...buildHierarchy(mergedFlat), ...omittedFlat];
 }
 
 /** Load a PDF from a URL or ArrayBuffer */
